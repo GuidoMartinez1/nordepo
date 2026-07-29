@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-lime: #c8ff00;
+  --brand-black: #0a0a0a;
+  --brand-charcoal: #161616;
+  --brand-snow: #f5f5f5;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #ececec;
+  color: #0a0a0a;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+@layer components {
+  .btn-primary {
+    @apply rounded-lg bg-brand-lime text-brand-black font-semibold hover:bg-brand-lime-dim transition disabled:opacity-60;
+  }
+}
