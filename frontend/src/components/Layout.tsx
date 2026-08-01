@@ -8,26 +8,43 @@ import {
   Truck,
   ArrowLeftRight,
   Factory,
+  TrendingUp,
   LogOut,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSucursal } from '../contexts/SucursalContext'
 import type { ReactNode } from 'react'
+import type { UserRole } from '../contexts/AuthContext'
 
-const links = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/productos', label: 'Productos', icon: Package },
-  { to: '/categorias', label: 'Categorías', icon: Tags },
-  { to: '/clientes', label: 'Clientes', icon: Users },
-  { to: '/ventas', label: 'Ventas', icon: ShoppingCart },
-  { to: '/compras', label: 'Compras', icon: Truck },
-  { to: '/traslados', label: 'Traslados', icon: ArrowLeftRight },
-  { to: '/proveedores', label: 'Proveedores', icon: Factory },
+type NavItem = {
+  to: string
+  label: string
+  icon: typeof Package
+  end?: boolean
+  roles: UserRole[]
+}
+
+/**
+ * admin: acceso completo (estado actual del sistema)
+ * vendedor: operativo de caja (se habilitará después; menú ya filtrado)
+ */
+const links: NavItem[] = [
+  { to: '/', label: 'Panel de Control', icon: LayoutDashboard, end: true, roles: ['admin'] },
+  { to: '/productos', label: 'Productos', icon: Package, roles: ['admin', 'vendedor'] },
+  { to: '/categorias', label: 'Categorías', icon: Tags, roles: ['admin'] },
+  { to: '/clientes', label: 'Clientes', icon: Users, roles: ['admin', 'vendedor'] },
+  { to: '/ventas', label: 'Ventas', icon: ShoppingCart, roles: ['admin', 'vendedor'] },
+  { to: '/compras', label: 'Compras', icon: Truck, roles: ['admin'] },
+  { to: '/traslados', label: 'Traslados', icon: ArrowLeftRight, roles: ['admin'] },
+  { to: '/proveedores', label: 'Proveedores', icon: Factory, roles: ['admin'] },
+  { to: '/actualizaciones', label: 'Actualizaciones', icon: TrendingUp, roles: ['admin'] },
 ]
 
 export default function Layout({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth()
   const { sucursales, sucursalId, setSucursalId } = useSucursal()
+  const role = user?.role ?? 'admin'
+  const visibleLinks = links.filter((l) => l.roles.includes(role))
 
   return (
     <div className="min-h-screen flex bg-[#e8e8e8]">
@@ -44,7 +61,7 @@ export default function Layout({ children }: { children?: ReactNode }) {
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          {links.map(({ to, label, icon: Icon, end }) => (
+          {visibleLinks.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -64,6 +81,9 @@ export default function Layout({ children }: { children?: ReactNode }) {
         </nav>
         <div className="p-4 border-t border-white/10 text-sm">
           <p className="text-brand-mute truncate">{user?.username}</p>
+          <p className="text-[11px] text-brand-lime/80 uppercase tracking-wide mt-0.5">
+            {role === 'admin' ? 'Administrador' : 'Vendedor'}
+          </p>
           <button
             type="button"
             onClick={logout}
@@ -76,16 +96,18 @@ export default function Layout({ children }: { children?: ReactNode }) {
 
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="h-14 bg-brand-black text-white border-b border-brand-lime/30 px-6 flex items-center justify-between">
-          <h1 className="font-display text-xl tracking-wide">
-            Gestión de ventas
-          </h1>
+          <h1 className="font-display text-xl tracking-wide">Gestión de ventas</h1>
           <label className="flex items-center gap-2 text-sm">
             <span className="text-brand-mute">Sucursal</span>
             <select
               className="rounded-md border border-white/15 bg-brand-ink text-white px-3 py-1.5 font-medium focus:outline-none focus:border-brand-lime"
-              value={sucursalId ?? ''}
-              onChange={(e) => setSucursalId(Number(e.target.value))}
+              value={sucursalId ?? 'all'}
+              onChange={(e) => {
+                const v = e.target.value
+                setSucursalId(v === 'all' ? null : Number(v))
+              }}
             >
+              <option value="all">Todas</option>
               {sucursales.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.nombre}

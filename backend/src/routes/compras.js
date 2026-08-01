@@ -1,26 +1,19 @@
 import express from 'express'
 import pool from '../db.js'
+import { getDepositoId } from '../utils/deposito.js'
 
 const router = express.Router()
 
 router.get('/', async (req, res) => {
-  const sucursalId = req.query.sucursal_id ? Number(req.query.sucursal_id) : null
   try {
-    const params = []
-    let where = ''
-    if (sucursalId) {
-      params.push(sucursalId)
-      where = `WHERE c.sucursal_id = $${params.length}`
-    }
+    // Las compras siempre van al depósito: listado global (no filtra por sucursal de venta)
     const { rows } = await pool.query(
       `SELECT c.*, s.nombre AS sucursal_nombre, p.nombre AS proveedor_nombre
        FROM compras c
        JOIN sucursales s ON s.id = c.sucursal_id
        LEFT JOIN proveedores p ON p.id = c.proveedor_id
-       ${where}
        ORDER BY c.fecha DESC
-       LIMIT 200`,
-      params
+       LIMIT 200`
     )
     res.json(rows)
   } catch (err) {
@@ -55,15 +48,12 @@ router.get('/:id', async (req, res) => {
 })
 
 /**
- * body: {
- *   sucursal_id, proveedor_id?, notas?,
- *   items: [{ producto_id, cantidad, precio_unitario }]
- * }
- * Suma stock en la sucursal indicada y actualiza precio_costo del producto.
+ * body: { proveedor_id?, notas?, items: [{ producto_id, cantidad, precio_unitario }] }
+ * El stock siempre ingresa al Depósito. El precio de venta por sucursal no cambia;
+ * si sube el costo, se recalcula el % en cada sucursal de venta.
  */
 router.post('/', async (req, res) => {
-  const { sucursal_id, proveedor_id, notas, items } = req.body || {}
-  if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es obligatorio' })
+  const { proveedor_id, notas, items } = req.body || {}
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'items es obligatorio' })
   }
@@ -71,6 +61,7 @@ router.post('/', async (req, res) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    const depositoId = await getDepositoId(client)
 
     let total = 0
     const lineas = items.map((it) => {
@@ -88,11 +79,22 @@ router.post('/', async (req, res) => {
       `INSERT INTO compras (sucursal_id, proveedor_id, total, notas)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [sucursal_id, proveedor_id || null, total, notas || null]
+      [depositoId, proveedor_id || null, total, notas || null]
     )
     const compra = compraRows[0]
 
     for (const linea of lineas) {
+      const prod = await client.query(
+        `SELECT precio_costo FROM productos WHERE id = $1`,
+        [linea.producto_id]
+      )
+      if (!prod.rows.length) {
+        throw Object.assign(new Error(`Producto ${linea.producto_id} no encontrado`), { status: 400 })
+      }
+
+      const costoActual = Number(prod.rows[0].precio_costo) || 0
+      const costoNuevo = linea.precio_unitario
+
       await client.query(
         `INSERT INTO detalles_compra (compra_id, producto_id, cantidad, precio_unitario, subtotal)
          VALUES ($1, $2, $3, $4, $5)`,
@@ -104,15 +106,39 @@ router.post('/', async (req, res) => {
          VALUES ($1, $2, $3)
          ON CONFLICT (producto_id, sucursal_id)
          DO UPDATE SET cantidad = stock_sucursal.cantidad + EXCLUDED.cantidad`,
-        [linea.producto_id, sucursal_id, linea.cantidad]
+        [linea.producto_id, depositoId, linea.cantidad]
       )
 
       await client.query(
-        `UPDATE productos
-         SET precio_costo = $1, updated_at = NOW()
-         WHERE id = $2`,
-        [linea.precio_unitario, linea.producto_id]
+        `INSERT INTO historial_costos
+           (producto_id, compra_id, sucursal_id, precio_costo_anterior, precio_costo_nuevo, cantidad)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [linea.producto_id, compra.id, depositoId, costoActual, costoNuevo, linea.cantidad]
       )
+
+      let precioCosto = costoActual
+      const costoSubio = costoNuevo > costoActual || (costoActual === 0 && costoNuevo > 0)
+      if (costoSubio) precioCosto = costoNuevo
+
+      if (precioCosto !== costoActual) {
+        await client.query(
+          `UPDATE productos SET precio_costo = $1, updated_at = NOW() WHERE id = $2`,
+          [precioCosto, linea.producto_id]
+        )
+      }
+
+      // Recalcular % de ganancia en cada sucursal de venta (el precio de venta no se toca)
+      if (costoSubio && precioCosto > 0) {
+        await client.query(
+          `UPDATE precio_sucursal ps
+           SET porcentaje_ganancia = ROUND(((ps.precio - $1) / $1) * 100, 2)
+           FROM sucursales s
+           WHERE ps.sucursal_id = s.id
+             AND s.es_deposito = FALSE
+             AND ps.producto_id = $2`,
+          [precioCosto, linea.producto_id]
+        )
+      }
     }
 
     await client.query('COMMIT')

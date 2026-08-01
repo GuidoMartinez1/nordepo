@@ -1,5 +1,6 @@
 import express from 'express'
 import pool from '../db.js'
+import { getDepositoId } from '../utils/deposito.js'
 
 const router = express.Router()
 
@@ -36,9 +37,8 @@ router.get('/', async (req, res) => {
 })
 
 /**
- * body: {
- *   producto_id, sucursal_origen_id, sucursal_destino_id, cantidad, notas?
- * }
+ * body: { producto_id, sucursal_destino_id, cantidad, notas?, sucursal_origen_id? }
+ * Por defecto el origen es el Depósito.
  */
 router.post('/', async (req, res) => {
   const {
@@ -50,26 +50,42 @@ router.post('/', async (req, res) => {
   } = req.body || {}
 
   const qty = Number(cantidad)
-  if (!producto_id || !sucursal_origen_id || !sucursal_destino_id || !(qty > 0)) {
+  if (!producto_id || !sucursal_destino_id || !(qty > 0)) {
     return res.status(400).json({ error: 'Datos de traslado incompletos' })
-  }
-  if (Number(sucursal_origen_id) === Number(sucursal_destino_id)) {
-    return res.status(400).json({ error: 'Origen y destino deben ser distintos' })
   }
 
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
 
+    const depositoId = await getDepositoId(client)
+    const origenId = sucursal_origen_id ? Number(sucursal_origen_id) : depositoId
+    const destinoId = Number(sucursal_destino_id)
+
+    if (origenId === destinoId) {
+      throw Object.assign(new Error('Origen y destino deben ser distintos'), { status: 400 })
+    }
+
+    const destino = await client.query(
+      `SELECT id, es_deposito FROM sucursales WHERE id = $1 AND activa = TRUE`,
+      [destinoId]
+    )
+    if (!destino.rows.length) {
+      throw Object.assign(new Error('Sucursal destino no encontrada'), { status: 400 })
+    }
+    if (destino.rows[0].es_deposito) {
+      throw Object.assign(new Error('El destino debe ser una sucursal de venta'), { status: 400 })
+    }
+
     const debited = await client.query(
       `UPDATE stock_sucursal
        SET cantidad = cantidad - $1
        WHERE producto_id = $2 AND sucursal_id = $3 AND cantidad >= $1
        RETURNING cantidad`,
-      [qty, producto_id, sucursal_origen_id]
+      [qty, producto_id, origenId]
     )
     if (!debited.rows.length) {
-      throw Object.assign(new Error('Stock insuficiente en sucursal origen'), { status: 400 })
+      throw Object.assign(new Error('Stock insuficiente en el depósito'), { status: 400 })
     }
 
     await client.query(
@@ -77,7 +93,7 @@ router.post('/', async (req, res) => {
        VALUES ($1, $2, $3)
        ON CONFLICT (producto_id, sucursal_id)
        DO UPDATE SET cantidad = stock_sucursal.cantidad + EXCLUDED.cantidad`,
-      [producto_id, sucursal_destino_id, qty]
+      [producto_id, destinoId, qty]
     )
 
     const { rows } = await client.query(
@@ -85,7 +101,7 @@ router.post('/', async (req, res) => {
          (producto_id, sucursal_origen_id, sucursal_destino_id, cantidad, usuario_id, notas)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [producto_id, sucursal_origen_id, sucursal_destino_id, qty, req.user?.id || null, notas || null]
+      [producto_id, origenId, destinoId, qty, req.user?.id || null, notas || null]
     )
 
     await client.query('COMMIT')

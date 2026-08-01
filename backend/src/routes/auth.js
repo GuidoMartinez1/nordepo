@@ -10,6 +10,10 @@ function getJwtExpiresIn() {
   return process.env.JWT_EXPIRES_IN || '3650d'
 }
 
+function normalizeRole(role) {
+  return role === 'vendedor' ? 'vendedor' : 'admin'
+}
+
 router.post('/login', async (req, res) => {
   const username = (req.body?.username || '').trim()
   const password = req.body?.password || ''
@@ -20,7 +24,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const result = await pool.query(
-      'SELECT id, username, password_hash FROM users WHERE username = $1',
+      'SELECT id, username, password_hash, role FROM users WHERE username = $1',
       [username]
     )
     if (result.rows.length === 0) {
@@ -37,14 +41,15 @@ router.post('/login', async (req, res) => {
       return res.status(500).json({ error: 'Error de configuración del servidor' })
     }
 
-    const token = jwt.sign({ username: user.username }, secret, {
+    const role = normalizeRole(user.role)
+    const token = jwt.sign({ username: user.username, role }, secret, {
       subject: String(user.id),
       expiresIn: getJwtExpiresIn(),
     })
 
     res.json({
       token,
-      user: { id: user.id, username: user.username },
+      user: { id: user.id, username: user.username, role },
     })
   } catch (err) {
     console.error('Error en login:', err)
@@ -53,7 +58,7 @@ router.post('/login', async (req, res) => {
 })
 
 router.get('/me', requireAuth, (req, res) => {
-  res.json({ id: req.user.id, username: req.user.username })
+  res.json({ id: req.user.id, username: req.user.username, role: req.user.role })
 })
 
 router.post('/logout', requireAuth, (_req, res) => {

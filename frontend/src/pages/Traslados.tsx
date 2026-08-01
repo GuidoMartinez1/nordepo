@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import toast from 'react-hot-toast'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
-import type { Producto, Sucursal } from '../types'
+import type { Producto } from '../types'
 
 type Traslado = {
   id: number
@@ -15,7 +15,7 @@ type Traslado = {
 }
 
 export default function Traslados() {
-  const { sucursalId, sucursales } = useSucursal()
+  const { sucursales, deposito } = useSucursal()
   const [historial, setHistorial] = useState<Traslado[]>([])
   const [productos, setProductos] = useState<Producto[]>([])
   const [productoId, setProductoId] = useState('')
@@ -23,28 +23,29 @@ export default function Traslados() {
   const [cantidad, setCantidad] = useState('1')
 
   async function load() {
-    if (!sucursalId) return
+    const prodParams = deposito?.id ? { sucursal_id: deposito.id } : {}
     const [t, p] = await Promise.all([
-      api.get<Traslado[]>('/traslados', { params: { sucursal_id: sucursalId } }),
-      api.get<Producto[]>('/productos', { params: { sucursal_id: sucursalId } }),
+      api.get<Traslado[]>('/traslados'),
+      api.get<Producto[]>('/productos', { params: prodParams }),
     ])
     setHistorial(t.data)
-    setProductos(p.data)
+    // Solo productos con stock en depósito
+    setProductos(p.data.filter((prod) => Number(prod.stock) > 0))
   }
 
   useEffect(() => {
     void load().catch(() => toast.error('Error al cargar traslados'))
-  }, [sucursalId])
-
-  const destinos = sucursales.filter((s: Sucursal) => s.id !== sucursalId)
+  }, [deposito?.id])
 
   async function onCreate(e: FormEvent) {
     e.preventDefault()
-    if (!sucursalId) return
+    if (!destinoId) {
+      toast.error('Elegí la sucursal destino')
+      return
+    }
     try {
       await api.post('/traslados', {
         producto_id: Number(productoId),
-        sucursal_origen_id: sucursalId,
         sucursal_destino_id: Number(destinoId),
         cantidad: Number(cantidad),
       })
@@ -66,7 +67,8 @@ export default function Traslados() {
       <div>
         <h2 className="font-display text-3xl tracking-wide text-brand-black">Traslados</h2>
         <p className="text-slate-500 text-sm">
-          Mueve stock desde la sucursal activa hacia otra
+          Mové stock del <span className="font-medium text-brand-black">Depósito</span> hacia una
+          sucursal de venta.
         </p>
       </div>
 
@@ -80,10 +82,10 @@ export default function Traslados() {
           onChange={(e) => setProductoId(e.target.value)}
           required
         >
-          <option value="">Producto…</option>
+          <option value="">Producto en depósito…</option>
           {productos.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.nombre} (stock {p.stock ?? 0})
+              {p.nombre} (depósito: {p.stock ?? 0})
             </option>
           ))}
         </select>
@@ -93,8 +95,8 @@ export default function Traslados() {
           onChange={(e) => setDestinoId(e.target.value)}
           required
         >
-          <option value="">Destino…</option>
-          {destinos.map((s) => (
+          <option value="">Sucursal destino…</option>
+          {sucursales.map((s) => (
             <option key={s.id} value={s.id}>
               {s.nombre}
             </option>
@@ -112,7 +114,7 @@ export default function Traslados() {
           type="submit"
           className="md:col-span-4 btn-primary py-2 text-sm font-semibold"
         >
-          Trasladar
+          Trasladar a sucursal
         </button>
       </form>
 
@@ -137,6 +139,13 @@ export default function Traslados() {
                 <td className="px-4 py-2 font-semibold">{t.cantidad}</td>
               </tr>
             ))}
+            {historial.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                  Sin traslados todavía
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

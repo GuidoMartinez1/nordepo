@@ -16,10 +16,22 @@ export function requireAuth(req, res, next) {
     req.user = {
       id: Number(payload.sub),
       username: payload.username,
+      role: payload.role === 'vendedor' ? 'vendedor' : 'admin',
     }
     next()
   } catch {
     return res.status(401).json({ error: 'Sesión inválida o vencida' })
+  }
+}
+
+/** Uso: requireRole('admin') o requireRole('admin', 'vendedor') */
+export function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'No autorizado' })
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'No tenés permiso para esta acción' })
+    }
+    next()
   }
 }
 

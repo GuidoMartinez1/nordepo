@@ -1,5 +1,6 @@
 import express from 'express'
 import pool from '../db.js'
+import { requireRole } from '../middleware/requireAuth.js'
 
 const router = express.Router()
 
@@ -129,6 +130,53 @@ router.post('/', async (req, res) => {
     await client.query('ROLLBACK')
     console.error(err)
     res.status(err.status || 500).json({ error: err.message || 'Error al crear venta' })
+  } finally {
+    client.release()
+  }
+})
+
+/** Solo admin: borra la venta y devuelve el stock a la sucursal. */
+router.delete('/:id', requireRole('admin'), async (req, res) => {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const { rows: ventaRows } = await client.query(
+      `SELECT id, sucursal_id, estado FROM ventas WHERE id = $1 FOR UPDATE`,
+      [req.params.id]
+    )
+    if (!ventaRows.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Venta no encontrada' })
+    }
+
+    const venta = ventaRows[0]
+    const { rows: detalles } = await client.query(
+      `SELECT producto_id, cantidad FROM detalles_venta WHERE venta_id = $1`,
+      [venta.id]
+    )
+
+    // Devolver stock si la venta había descontado (completada / adeuda)
+    if (venta.estado === 'completada' || venta.estado === 'adeuda') {
+      for (const d of detalles) {
+        if (!d.producto_id) continue
+        await client.query(
+          `INSERT INTO stock_sucursal (producto_id, sucursal_id, cantidad)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (producto_id, sucursal_id)
+           DO UPDATE SET cantidad = stock_sucursal.cantidad + EXCLUDED.cantidad`,
+          [d.producto_id, venta.sucursal_id, d.cantidad]
+        )
+      }
+    }
+
+    await client.query('DELETE FROM ventas WHERE id = $1', [venta.id])
+    await client.query('COMMIT')
+    res.json({ ok: true, message: 'Venta eliminada y stock restaurado' })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    console.error(err)
+    res.status(500).json({ error: 'Error al eliminar venta' })
   } finally {
     client.release()
   }

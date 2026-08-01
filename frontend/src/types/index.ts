@@ -3,6 +3,7 @@ export type Sucursal = {
   nombre: string
   codigo: string
   activa: boolean
+  es_deposito?: boolean
 }
 
 export type Producto = {

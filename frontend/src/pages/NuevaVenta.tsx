@@ -9,7 +9,7 @@ import type { Producto } from '../types'
 type Linea = { producto: Producto; cantidad: number }
 
 export default function NuevaVenta() {
-  const { sucursalId, sucursal } = useSucursal()
+  const { sucursalId, sucursal, esTodas } = useSucursal()
   const navigate = useNavigate()
   const [productos, setProductos] = useState<Producto[]>([])
   const [q, setQ] = useState('')
@@ -24,6 +24,17 @@ export default function NuevaVenta() {
       .then((res) => setProductos(res.data))
       .catch(() => toast.error('Error al cargar productos'))
   }, [sucursalId])
+
+  if (esTodas || !sucursalId) {
+    return (
+      <div className="space-y-4">
+        <h2 className="font-display text-3xl tracking-wide text-brand-black">Nueva venta</h2>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-amber-900 text-sm">
+          Seleccioná una sucursal concreta arriba para vender (el stock y el precio son por sucursal).
+        </div>
+      </div>
+    )
+  }
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()

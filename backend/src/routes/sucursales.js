@@ -3,10 +3,15 @@ import pool from '../db.js'
 
 const router = express.Router()
 
-router.get('/', async (_req, res) => {
+/** ?venta=1 → solo sucursales de venta (sin depósito) */
+router.get('/', async (req, res) => {
   try {
+    const soloVenta = req.query.venta === '1' || req.query.venta === 'true'
     const { rows } = await pool.query(
-      'SELECT id, nombre, codigo, activa, created_at FROM sucursales ORDER BY nombre'
+      `SELECT id, nombre, codigo, activa, es_deposito, created_at
+       FROM sucursales
+       ${soloVenta ? 'WHERE COALESCE(es_deposito, FALSE) = FALSE' : ''}
+       ORDER BY es_deposito DESC, nombre`
     )
     res.json(rows)
   } catch (err) {
@@ -18,7 +23,7 @@ router.get('/', async (_req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, nombre, codigo, activa, created_at FROM sucursales WHERE id = $1',
+      'SELECT id, nombre, codigo, activa, es_deposito, created_at FROM sucursales WHERE id = $1',
       [req.params.id]
     )
     if (!rows.length) return res.status(404).json({ error: 'Sucursal no encontrada' })
@@ -37,9 +42,9 @@ router.post('/', async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `INSERT INTO sucursales (nombre, codigo, activa)
-       VALUES ($1, $2, COALESCE($3, TRUE))
-       RETURNING id, nombre, codigo, activa, created_at`,
+      `INSERT INTO sucursales (nombre, codigo, activa, es_deposito)
+       VALUES ($1, $2, COALESCE($3, TRUE), FALSE)
+       RETURNING id, nombre, codigo, activa, es_deposito, created_at`,
       [nombre, codigo, req.body?.activa]
     )
     res.status(201).json(rows[0])
@@ -62,8 +67,8 @@ router.put('/:id', async (req, res) => {
        SET nombre = COALESCE(NULLIF($1, ''), nombre),
            codigo = COALESCE(NULLIF($2, ''), codigo),
            activa = COALESCE($3, activa)
-       WHERE id = $4
-       RETURNING id, nombre, codigo, activa, created_at`,
+       WHERE id = $4 AND COALESCE(es_deposito, FALSE) = FALSE
+       RETURNING id, nombre, codigo, activa, es_deposito, created_at`,
       [nombre, codigo, activa, req.params.id]
     )
     if (!rows.length) return res.status(404).json({ error: 'Sucursal no encontrada' })

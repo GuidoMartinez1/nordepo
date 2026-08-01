@@ -40,13 +40,13 @@ router.get('/dashboard', async (req, res) => {
       )
     } else {
       bajoStock = await pool.query(
-        `SELECT p.id, p.nombre, SUM(ss.cantidad)::int AS stock
+        `SELECT p.id, p.nombre, s.nombre AS sucursal_nombre, ss.cantidad AS stock
          FROM stock_sucursal ss
          JOIN productos p ON p.id = ss.producto_id
-         GROUP BY p.id, p.nombre
-         HAVING SUM(ss.cantidad) <= 5
-         ORDER BY stock ASC
-         LIMIT 10`
+         JOIN sucursales s ON s.id = ss.sucursal_id
+         WHERE ss.cantidad <= 5
+         ORDER BY ss.cantidad ASC, p.nombre
+         LIMIT 20`
       )
     }
 

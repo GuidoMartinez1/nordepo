@@ -9,12 +9,15 @@ import {
 } from 'react'
 import api, { AUTH_TOKEN_KEY } from '../services/api'
 
-export type AuthUser = { id: number; username: string }
+export type UserRole = 'admin' | 'vendedor'
+
+export type AuthUser = { id: number; username: string; role: UserRole }
 
 type AuthContextValue = {
   user: AuthUser | null
   token: string | null
   ready: boolean
+  isAdmin: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => void
 }
@@ -27,6 +30,10 @@ function applyAxiosToken(token: string | null) {
   } else {
     delete api.defaults.headers.common.Authorization
   }
+}
+
+function normalizeRole(role: unknown): UserRole {
+  return role === 'vendedor' ? 'vendedor' : 'admin'
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -45,7 +52,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(stored)
     api
       .get<AuthUser>('/auth/me')
-      .then((res) => setUser(res.data))
+      .then((res) =>
+        setUser({
+          ...res.data,
+          role: normalizeRole(res.data.role),
+        })
+      )
       .catch(() => {
         localStorage.removeItem(AUTH_TOKEN_KEY)
         setToken(null)
@@ -62,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(AUTH_TOKEN_KEY, data.token)
     applyAxiosToken(data.token)
     setToken(data.token)
-    setUser(data.user)
+    setUser({ ...data.user, role: normalizeRole(data.user.role) })
   }, [])
 
   const logout = useCallback(() => {
@@ -72,9 +84,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const isAdmin = user?.role === 'admin'
+
   const value = useMemo(
-    () => ({ user, token, ready, login, logout }),
-    [user, token, ready, login, logout]
+    () => ({ user, token, ready, isAdmin, login, logout }),
+    [user, token, ready, isAdmin, login, logout]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

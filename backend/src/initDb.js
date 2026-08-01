@@ -4,9 +4,9 @@ import 'dotenv/config'
 
 /**
  * Schema NORDEPO:
- * - Stock por sucursal (no stock global en productos)
- * - Ventas/compras atadas a sucursal
- * - Traslados entre sucursales
+ * - Stock por sucursal + depósito central
+ * - Compras ingresan al depósito; traslados a sucursales de venta
+ * - Precio de venta / % por sucursal (no en depósito)
  * - Sin bolsas / precio_kg / AFIP
  */
 export async function initDatabase() {
@@ -20,8 +20,13 @@ export async function initDatabase() {
         nombre VARCHAR(255) NOT NULL,
         codigo VARCHAR(50) UNIQUE NOT NULL,
         activa BOOLEAN DEFAULT TRUE,
+        es_deposito BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `)
+    await client.query(`
+      ALTER TABLE sucursales
+      ADD COLUMN IF NOT EXISTS es_deposito BOOLEAN NOT NULL DEFAULT FALSE
     `)
 
     await client.query(`
@@ -29,9 +34,17 @@ export async function initDatabase() {
         id SERIAL PRIMARY KEY,
         username VARCHAR(100) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        role VARCHAR(20) NOT NULL DEFAULT 'admin'
+          CHECK (role IN ('admin', 'vendedor')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `)
+    // Migración suave si la tabla ya existía sin role
+    await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'admin'
+    `)
+    await client.query(`UPDATE users SET role = 'admin' WHERE role IS NULL OR role = ''`)
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS categorias (
@@ -150,6 +163,41 @@ export async function initDatabase() {
       )
     `)
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS historial_costos (
+        id SERIAL PRIMARY KEY,
+        producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+        compra_id INTEGER REFERENCES compras(id) ON DELETE CASCADE,
+        sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL,
+        precio_costo_anterior DECIMAL(12,2) NOT NULL DEFAULT 0,
+        precio_costo_nuevo DECIMAL(12,2) NOT NULL DEFAULT 0,
+        cantidad INTEGER DEFAULT 0,
+        revisado BOOLEAN NOT NULL DEFAULT FALSE,
+        creado_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
+    // Precio de venta y % por sucursal (el costo sigue global en productos)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS precio_sucursal (
+        producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+        sucursal_id INTEGER NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
+        precio DECIMAL(12,2) NOT NULL DEFAULT 0,
+        porcentaje_ganancia DECIMAL(7,2) DEFAULT 30,
+        PRIMARY KEY (producto_id, sucursal_id)
+      )
+    `)
+
+    // Backfill: precios solo en sucursales de venta (no depósito)
+    await client.query(`
+      INSERT INTO precio_sucursal (producto_id, sucursal_id, precio, porcentaje_ganancia)
+      SELECT p.id, s.id, p.precio, COALESCE(p.porcentaje_ganancia, 30)
+      FROM productos p
+      CROSS JOIN sucursales s
+      WHERE s.activa = TRUE AND COALESCE(s.es_deposito, FALSE) = FALSE
+      ON CONFLICT (producto_id, sucursal_id) DO NOTHING
+    `)
+
     await client.query('CREATE INDEX IF NOT EXISTS idx_productos_categoria ON productos(categoria_id)')
     await client.query('CREATE INDEX IF NOT EXISTS idx_productos_codigo ON productos(codigo)')
     await client.query('CREATE INDEX IF NOT EXISTS idx_stock_sucursal_sucursal ON stock_sucursal(sucursal_id)')
@@ -158,17 +206,22 @@ export async function initDatabase() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_ventas_estado ON ventas(estado)')
     await client.query('CREATE INDEX IF NOT EXISTS idx_compras_sucursal ON compras(sucursal_id)')
     await client.query('CREATE INDEX IF NOT EXISTS idx_traslados_fecha ON traslados(fecha)')
+    await client.query('CREATE INDEX IF NOT EXISTS idx_historial_costos_revisado ON historial_costos(revisado)')
+    await client.query('CREATE INDEX IF NOT EXISTS idx_historial_costos_producto ON historial_costos(producto_id)')
 
-    // Sucursales iniciales
-    const { rows: sucCount } = await client.query('SELECT COUNT(*)::int AS c FROM sucursales')
-    if (sucCount[0].c === 0) {
-      await client.query(
-        `INSERT INTO sucursales (nombre, codigo) VALUES
-          ('Sucursal Centro', 'CENTRO'),
-          ('Sucursal Norte', 'NORTE')`
-      )
-      console.log('Sucursales iniciales creadas: Centro, Norte')
-    }
+    // Sucursales: depósito + locales de venta
+    await client.query(`
+      INSERT INTO sucursales (nombre, codigo, es_deposito)
+      VALUES ('Depósito', 'DEPOSITO', TRUE)
+      ON CONFLICT (codigo) DO UPDATE SET es_deposito = TRUE, nombre = 'Depósito'
+    `)
+    await client.query(`
+      INSERT INTO sucursales (nombre, codigo, es_deposito)
+      VALUES
+        ('Sucursal Centro', 'CENTRO', FALSE),
+        ('Sucursal Norte', 'NORTE', FALSE)
+      ON CONFLICT (codigo) DO NOTHING
+    `)
 
     // Usuario admin
     const { rows: userCount } = await client.query('SELECT COUNT(*)::int AS c FROM users')
@@ -177,11 +230,11 @@ export async function initDatabase() {
       const adminPass = process.env.ADMIN_PASSWORD || ''
       if (adminUser && adminPass) {
         const hash = await bcrypt.hash(adminPass, 12)
-        await client.query('INSERT INTO users (username, password_hash) VALUES ($1, $2)', [
-          adminUser,
-          hash,
-        ])
-        console.log(`Usuario inicial creado: ${adminUser}`)
+        await client.query(
+          `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, 'admin')`,
+          [adminUser, hash]
+        )
+        console.log(`Usuario inicial creado: ${adminUser} (admin)`)
       } else {
         console.log('Sin usuarios: definí ADMIN_USERNAME y ADMIN_PASSWORD en .env')
       }

@@ -16,6 +16,8 @@ import ventasRoutes from './routes/ventas.js'
 import comprasRoutes from './routes/compras.js'
 import trasladosRoutes from './routes/traslados.js'
 import statsRoutes from './routes/stats.js'
+import actualizacionesRoutes from './routes/actualizaciones.js'
+import { requireRole } from './middleware/requireAuth.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -57,14 +59,15 @@ app.use((req, res, next) => {
 })
 
 app.use('/api/sucursales', sucursalesRoutes)
-app.use('/api/categorias', categoriasRoutes)
+app.use('/api/categorias', requireRole('admin'), categoriasRoutes)
 app.use('/api/productos', productosRoutes)
 app.use('/api/clientes', clientesRoutes)
-app.use('/api/proveedores', proveedoresRoutes)
+app.use('/api/proveedores', requireRole('admin'), proveedoresRoutes)
 app.use('/api/ventas', ventasRoutes)
-app.use('/api/compras', comprasRoutes)
-app.use('/api/traslados', trasladosRoutes)
-app.use('/api/stats', statsRoutes)
+app.use('/api/compras', requireRole('admin'), comprasRoutes)
+app.use('/api/traslados', requireRole('admin'), trasladosRoutes)
+app.use('/api/stats', requireRole('admin'), statsRoutes)
+app.use('/api/actualizaciones-precios', actualizacionesRoutes)
 
 app.use((err, _req, res, _next) => {
   console.error('Unhandled error:', err)
