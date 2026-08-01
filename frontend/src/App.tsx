@@ -17,6 +17,7 @@ import Compras from './pages/Compras'
 import NuevaCompra from './pages/NuevaCompra'
 import Traslados from './pages/Traslados'
 import Actualizaciones from './pages/Actualizaciones'
+import CuentasMp from './pages/CuentasMp'
 
 export default function App() {
   return (
@@ -54,6 +55,14 @@ export default function App() {
                         element={
                           <RoleRoute roles={['admin']}>
                             <Proveedores />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/cuentas-mp"
+                        element={
+                          <RoleRoute roles={['admin']}>
+                            <CuentasMp />
                           </RoleRoute>
                         }
                       />

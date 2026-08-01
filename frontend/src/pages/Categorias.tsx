@@ -67,21 +67,21 @@ export default function Categorias() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="font-display text-3xl tracking-wide text-brand-black">Categorías</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="page-title">Categorías</h2>
         <button type="button" onClick={openCreate} className="btn-primary px-4 py-2 text-sm font-semibold">
           Nueva categoría
         </button>
       </div>
 
-      <ul className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 grid md:grid-cols-2 xl:grid-cols-3">
+      <ul className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 md:grid md:grid-cols-2 xl:grid-cols-3 md:divide-y-0 md:gap-0">
         {items.map((c) => (
-          <li key={c.id} className="px-4 py-3 text-sm flex items-center justify-between gap-3 border-slate-100">
-            <div>
+          <li key={c.id} className="px-4 py-3 text-sm flex items-center justify-between gap-3 md:border-b md:border-r border-slate-100">
+            <div className="min-w-0">
               <p className="font-medium">{c.nombre}</p>
               {c.descripcion && <p className="text-slate-500 text-xs mt-0.5">{c.descripcion}</p>}
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-1 shrink-0">
               <button type="button" onClick={() => openEdit(c)} className="p-1.5 rounded hover:bg-slate-100">
                 <Pencil size={16} />
               </button>
@@ -94,8 +94,8 @@ export default function Categorias() {
       </ul>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <form onSubmit={onSubmit} className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50">
+          <form onSubmit={onSubmit} className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-2xl">{editing ? 'Editar categoría' : 'Nueva categoría'}</h3>
               <button type="button" onClick={() => setShowModal(false)} className="p-1 rounded hover:bg-slate-100">

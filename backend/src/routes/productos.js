@@ -53,6 +53,30 @@ router.get('/', async (req, res) => {
   }
 })
 
+router.get('/:id/historial', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+          hc.creado_at AS fecha,
+          hc.precio_costo_anterior AS costo_anterior,
+          hc.precio_costo_nuevo AS costo,
+          hc.cantidad,
+          COALESCE(pr.nombre, '—') AS proveedor
+       FROM historial_costos hc
+       LEFT JOIN compras c ON hc.compra_id = c.id
+       LEFT JOIN proveedores pr ON c.proveedor_id = pr.id
+       WHERE hc.producto_id = $1
+       ORDER BY hc.creado_at DESC
+       LIMIT 20`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Error al obtener historial' })
+  }
+})
+
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(

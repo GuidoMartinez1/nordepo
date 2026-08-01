@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
-import type { Producto } from '../types'
+import type { CuentaMp, Producto } from '../types'
 
 type Linea = { producto: Producto; cantidad: number }
 
@@ -12,9 +12,11 @@ export default function NuevaVenta() {
   const { sucursalId, sucursal, esTodas } = useSucursal()
   const navigate = useNavigate()
   const [productos, setProductos] = useState<Producto[]>([])
+  const [cuentasMp, setCuentasMp] = useState<CuentaMp[]>([])
   const [q, setQ] = useState('')
   const [lineas, setLineas] = useState<Linea[]>([])
   const [metodoPago, setMetodoPago] = useState('efectivo')
+  const [cuentaMpId, setCuentaMpId] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -23,6 +25,11 @@ export default function NuevaVenta() {
       .get<Producto[]>('/productos', { params: { sucursal_id: sucursalId } })
       .then((res) => setProductos(res.data))
       .catch(() => toast.error('Error al cargar productos'))
+    api
+      .get<CuentaMp[]>('/cuentas-mp', { params: { sucursal_id: sucursalId } })
+      .then((res) => setCuentasMp(res.data))
+      .catch(() => setCuentasMp([]))
+    setCuentaMpId('')
   }, [sucursalId])
 
   if (esTodas || !sucursalId) {
@@ -73,11 +80,16 @@ export default function NuevaVenta() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (!sucursalId || lineas.length === 0) return
+    if (metodoPago === 'mercadopago' && !cuentaMpId) {
+      toast.error('Elegí a qué alias se transfiere')
+      return
+    }
     setSaving(true)
     try {
       await api.post('/ventas', {
         sucursal_id: sucursalId,
         metodo_pago: metodoPago,
+        cuenta_mp_id: metodoPago === 'mercadopago' ? Number(cuentaMpId) : null,
         items: lineas.map((l) => ({
           producto_id: l.producto.id,
           cantidad: l.cantidad,
@@ -159,13 +171,39 @@ export default function NuevaVenta() {
             <select
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
               value={metodoPago}
-              onChange={(e) => setMetodoPago(e.target.value)}
+              onChange={(e) => {
+                setMetodoPago(e.target.value)
+                if (e.target.value !== 'mercadopago') setCuentaMpId('')
+              }}
             >
               <option value="efectivo">Efectivo</option>
               <option value="mercadopago">Mercado Pago</option>
               <option value="tarjeta">Tarjeta</option>
             </select>
           </label>
+          {metodoPago === 'mercadopago' && (
+            <label className="block text-sm">
+              <span className="text-slate-500">Alias / cuenta destino</span>
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                value={cuentaMpId}
+                onChange={(e) => setCuentaMpId(e.target.value)}
+                required
+              >
+                <option value="">Elegí alias…</option>
+                {cuentasMp.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre} ({c.alias})
+                  </option>
+                ))}
+              </select>
+              {cuentasMp.length === 0 && (
+                <p className="text-xs text-amber-700 mt-1">
+                  No hay cuentas MP activas en esta sucursal. Pedile al admin que las cargue.
+                </p>
+              )}
+            </label>
+          )}
           <div className="flex items-center justify-between border-t border-slate-100 pt-3">
             <span className="font-semibold">Total</span>
             <span className="text-xl font-bold text-brand-black">

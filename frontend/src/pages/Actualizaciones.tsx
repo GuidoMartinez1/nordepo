@@ -185,7 +185,7 @@ export default function Actualizaciones() {
           <TrendingUp className="h-7 w-7 text-brand-black" />
         </div>
         <div>
-          <h2 className="font-display text-3xl tracking-wide text-brand-black">Actualizaciones</h2>
+          <h2 className="page-title">Actualizaciones</h2>
           <p className="text-slate-500 text-sm">
             Revisión de cambios de costo detectados en compras
           </p>

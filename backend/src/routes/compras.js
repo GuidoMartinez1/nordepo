@@ -1,6 +1,7 @@
 import express from 'express'
 import pool from '../db.js'
 import { getDepositoId } from '../utils/deposito.js'
+import { restarAFuturosPedidos } from '../utils/futurosPedidosHelper.js'
 
 const router = express.Router()
 
@@ -139,6 +140,9 @@ router.post('/', async (req, res) => {
           [precioCosto, linea.producto_id]
         )
       }
+
+      // Consume de la lista de futuros pedidos
+      await restarAFuturosPedidos(client, linea.producto_id, linea.cantidad)
     }
 
     await client.query('COMMIT')

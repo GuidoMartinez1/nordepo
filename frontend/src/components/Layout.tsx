@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Package,
@@ -9,7 +10,10 @@ import {
   ArrowLeftRight,
   Factory,
   TrendingUp,
+  Wallet,
   LogOut,
+  Menu,
+  X,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSucursal } from '../contexts/SucursalContext'
@@ -24,10 +28,6 @@ type NavItem = {
   roles: UserRole[]
 }
 
-/**
- * admin: acceso completo (estado actual del sistema)
- * vendedor: operativo de caja (se habilitará después; menú ya filtrado)
- */
 const links: NavItem[] = [
   { to: '/', label: 'Panel de Control', icon: LayoutDashboard, end: true, roles: ['admin'] },
   { to: '/productos', label: 'Productos', icon: Package, roles: ['admin', 'vendedor'] },
@@ -37,49 +37,85 @@ const links: NavItem[] = [
   { to: '/compras', label: 'Compras', icon: Truck, roles: ['admin'] },
   { to: '/traslados', label: 'Traslados', icon: ArrowLeftRight, roles: ['admin'] },
   { to: '/proveedores', label: 'Proveedores', icon: Factory, roles: ['admin'] },
+  { to: '/cuentas-mp', label: 'Cuentas MP', icon: Wallet, roles: ['admin'] },
   { to: '/actualizaciones', label: 'Actualizaciones', icon: TrendingUp, roles: ['admin'] },
 ]
 
 export default function Layout({ children }: { children?: ReactNode }) {
   const { user, logout } = useAuth()
   const { sucursales, sucursalId, setSucursalId } = useSucursal()
+  const location = useLocation()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const role = user?.role ?? 'admin'
   const visibleLinks = links.filter((l) => l.roles.includes(role))
 
   return (
-    <div className="min-h-screen flex bg-[#e8e8e8]">
-      <aside className="w-64 shrink-0 bg-brand-black text-white flex flex-col border-r border-white/5">
-        <div className="px-5 py-5 border-b border-white/10 flex items-center gap-3">
-          <img
-            src="/logo.png"
-            alt="NORDEPO"
-            className="h-12 w-12 rounded-full object-cover shadow-lime"
-          />
-          <div>
-            <p className="font-display text-2xl tracking-wide leading-none">NORDEPO</p>
-            <p className="text-[11px] text-brand-mute mt-1">Artículos deportivos</p>
+    <div className="flex h-screen bg-[#e8e8e8]">
+      {/* Overlay mobile — mismo patrón que AliMar */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      {/* Sidebar: fixed + translate en mobile, relative en md+ */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-brand-black text-white shadow-lg transform transition-transform duration-300 ease-in-out flex flex-col
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:relative md:translate-x-0`}
+      >
+        <div className="flex items-center justify-between h-16 px-4 border-b border-brand-lime/30 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <img
+              src="/logo.png"
+              alt="NORDEPO"
+              className="h-9 w-9 shrink-0 rounded-full object-cover shadow-lime"
+            />
+            <div className="min-w-0">
+              <h1 className="font-display text-xl tracking-wide text-white truncate leading-none">
+                NORDEPO
+              </h1>
+              <p className="text-[10px] text-brand-mute mt-0.5 truncate">Artículos deportivos</p>
+            </div>
           </div>
+          <button
+            type="button"
+            className="md:hidden text-white p-1 rounded hover:bg-white/10 focus:outline-none"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Cerrar menú"
+          >
+            <X className="h-6 w-6" />
+          </button>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
-          {visibleLinks.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
+
+        <nav className="mt-3 flex-1 min-h-0 overflow-auto px-3 space-y-1 pb-3">
+          {visibleLinks.map(({ to, label, icon: Icon, end }) => {
+            const isActive =
+              end
+                ? location.pathname === to
+                : location.pathname === to || location.pathname.startsWith(`${to}/`)
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-brand-lime text-brand-black font-semibold'
+                    ? 'bg-brand-lime text-brand-black'
                     : 'text-zinc-300 hover:bg-white/5 hover:text-white'
-                }`
-              }
-            >
-              <Icon size={18} />
-              {label}
-            </NavLink>
-          ))}
+                }`}
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                {label}
+              </NavLink>
+            )
+          })}
         </nav>
-        <div className="p-4 border-t border-white/10 text-sm">
+
+        <div className="p-4 border-t border-white/10 text-sm shrink-0">
           <p className="text-brand-mute truncate">{user?.username}</p>
           <p className="text-[11px] text-brand-lime/80 uppercase tracking-wide mt-0.5">
             {role === 'admin' ? 'Administrador' : 'Vendedor'}
@@ -94,29 +130,53 @@ export default function Layout({ children }: { children?: ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="h-14 bg-brand-black text-white border-b border-brand-lime/30 px-6 flex items-center justify-between">
-          <h1 className="font-display text-xl tracking-wide">Gestión de ventas</h1>
-          <label className="flex items-center gap-2 text-sm">
-            <span className="text-brand-mute">Sucursal</span>
-            <select
-              className="rounded-md border border-white/15 bg-brand-ink text-white px-3 py-1.5 font-medium focus:outline-none focus:border-brand-lime"
-              value={sucursalId ?? 'all'}
-              onChange={(e) => {
-                const v = e.target.value
-                setSucursalId(v === 'all' ? null : Number(v))
-              }}
+      {/* Main */}
+      <div className="flex-1 flex flex-col overflow-hidden w-full min-w-0">
+        <header className="flex shrink-0 items-center justify-between gap-2 h-14 px-3 sm:px-5 bg-brand-black text-white border-b border-brand-lime/30">
+          <div className="flex items-center shrink-0 w-10">
+            <button
+              type="button"
+              className="md:hidden p-2 rounded-lg text-white hover:bg-white/10 focus:outline-none"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Abrir menú"
             >
-              <option value="all">Todas</option>
-              {sucursales.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nombre}
-                </option>
-              ))}
-            </select>
-          </label>
+              <Menu className="h-6 w-6" />
+            </button>
+          </div>
+
+          <div className="flex-1 min-w-0 flex justify-center md:justify-start">
+            <h1 className="font-display text-base sm:text-lg tracking-wide truncate">
+              Gestión de ventas
+            </h1>
+          </div>
+
+          <div className="flex items-center justify-end shrink-0">
+            <label className="flex items-center gap-1.5 text-xs sm:text-sm">
+              <span className="text-brand-mute hidden sm:inline">Sucursal</span>
+              <select
+                className="max-w-[38vw] sm:max-w-[11rem] rounded-md border border-white/15 bg-brand-ink text-white px-2 sm:px-3 py-1.5 font-medium focus:outline-none focus:border-brand-lime"
+                value={sucursalId ?? 'all'}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setSucursalId(v === 'all' ? null : Number(v))
+                }}
+              >
+                <option value="all">Todas</option>
+                {sucursales.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </header>
-        <main className="flex-1 p-6 overflow-auto">{children ?? <Outlet />}</main>
+
+        <main className="flex-1 overflow-auto p-4 md:p-8">
+          <div className="max-w-[1920px] w-full mx-auto overflow-x-auto">
+            {children ?? <Outlet />}
+          </div>
+        </main>
       </div>
     </div>
   )

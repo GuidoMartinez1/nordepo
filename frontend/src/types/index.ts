@@ -37,4 +37,16 @@ export type Venta = {
   fecha: string
   estado: string
   metodo_pago: string
+  cuenta_mp_id?: number | null
+  cuenta_mp_nombre?: string | null
+  cuenta_mp_alias?: string | null
+}
+
+export type CuentaMp = {
+  id: number
+  sucursal_id: number
+  sucursal_nombre?: string
+  nombre: string
+  alias: string
+  activa: boolean
 }

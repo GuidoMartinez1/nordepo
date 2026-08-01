@@ -115,6 +115,27 @@ export async function initDatabase() {
       )
     `)
 
+    // Cuentas / alias de Mercado Pago por sucursal
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cuentas_mp (
+        id SERIAL PRIMARY KEY,
+        sucursal_id INTEGER NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
+        nombre VARCHAR(255) NOT NULL,
+        alias VARCHAR(255) NOT NULL,
+        activa BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (sucursal_id, alias)
+      )
+    `)
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_cuentas_mp_sucursal ON cuentas_mp(sucursal_id)
+    `)
+
+    await client.query(`
+      ALTER TABLE ventas
+      ADD COLUMN IF NOT EXISTS cuenta_mp_id INTEGER REFERENCES cuentas_mp(id) ON DELETE SET NULL
+    `)
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS detalles_venta (
         id SERIAL PRIMARY KEY,
@@ -177,6 +198,20 @@ export async function initDatabase() {
       )
     `)
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS futuros_pedidos (
+        id SERIAL PRIMARY KEY,
+        producto VARCHAR(255),
+        producto_id INTEGER REFERENCES productos(id) ON DELETE SET NULL,
+        cantidad VARCHAR(50),
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_futuros_pedidos_producto
+      ON futuros_pedidos(producto_id)
+    `)
+
     // Precio de venta y % por sucursal (el costo sigue global en productos)
     await client.query(`
       CREATE TABLE IF NOT EXISTS precio_sucursal (
@@ -218,9 +253,10 @@ export async function initDatabase() {
     await client.query(`
       INSERT INTO sucursales (nombre, codigo, es_deposito)
       VALUES
-        ('Sucursal Centro', 'CENTRO', FALSE),
-        ('Sucursal Norte', 'NORTE', FALSE)
-      ON CONFLICT (codigo) DO NOTHING
+        ('Galería', 'CENTRO', FALSE),
+        ('Oulet', 'NORTE', FALSE)
+      ON CONFLICT (codigo) DO UPDATE
+      SET nombre = EXCLUDED.nombre
     `)
 
     // Usuario admin

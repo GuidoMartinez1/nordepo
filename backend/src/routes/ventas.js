@@ -1,8 +1,21 @@
 import express from 'express'
 import pool from '../db.js'
 import { requireRole } from '../middleware/requireAuth.js'
+import { sumarAFuturosPedidos, restarAFuturosPedidos } from '../utils/futurosPedidosHelper.js'
 
 const router = express.Router()
+
+const ventaSelect = `
+  SELECT v.*,
+         s.nombre AS sucursal_nombre,
+         c.nombre AS cliente_nombre,
+         cmp.nombre AS cuenta_mp_nombre,
+         cmp.alias AS cuenta_mp_alias
+  FROM ventas v
+  JOIN sucursales s ON s.id = v.sucursal_id
+  LEFT JOIN clientes c ON c.id = v.cliente_id
+  LEFT JOIN cuentas_mp cmp ON cmp.id = v.cuenta_mp_id
+`
 
 router.get('/', async (req, res) => {
   const sucursalId = req.query.sucursal_id ? Number(req.query.sucursal_id) : null
@@ -14,10 +27,7 @@ router.get('/', async (req, res) => {
       where = `WHERE v.sucursal_id = $${params.length}`
     }
     const { rows } = await pool.query(
-      `SELECT v.*, s.nombre AS sucursal_nombre, c.nombre AS cliente_nombre
-       FROM ventas v
-       JOIN sucursales s ON s.id = v.sucursal_id
-       LEFT JOIN clientes c ON c.id = v.cliente_id
+      `${ventaSelect}
        ${where}
        ORDER BY v.fecha DESC
        LIMIT 200`,
@@ -32,14 +42,7 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT v.*, s.nombre AS sucursal_nombre, c.nombre AS cliente_nombre
-       FROM ventas v
-       JOIN sucursales s ON s.id = v.sucursal_id
-       LEFT JOIN clientes c ON c.id = v.cliente_id
-       WHERE v.id = $1`,
-      [req.params.id]
-    )
+    const { rows } = await pool.query(`${ventaSelect} WHERE v.id = $1`, [req.params.id])
     if (!rows.length) return res.status(404).json({ error: 'Venta no encontrada' })
     const detalles = await pool.query(
       `SELECT d.*, p.nombre AS producto_nombre
@@ -57,20 +60,45 @@ router.get('/:id', async (req, res) => {
 
 /**
  * body: {
- *   sucursal_id, cliente_id?, metodo_pago?, estado?, notas?,
+ *   sucursal_id, cliente_id?, metodo_pago?, cuenta_mp_id?, estado?, notas?,
  *   items: [{ producto_id, cantidad, precio_unitario }]
  * }
  */
 router.post('/', async (req, res) => {
-  const { sucursal_id, cliente_id, metodo_pago, estado, notas, items } = req.body || {}
+  const { sucursal_id, cliente_id, metodo_pago, cuenta_mp_id, estado, notas, items } =
+    req.body || {}
   if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es obligatorio' })
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'items es obligatorio' })
   }
 
+  const metodo = metodo_pago || 'efectivo'
+  let cuentaMpId = null
+
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+
+    if (metodo === 'mercadopago') {
+      if (!cuenta_mp_id) {
+        throw Object.assign(
+          new Error('Elegí la cuenta / alias de Mercado Pago'),
+          { status: 400 }
+        )
+      }
+      const cuenta = await client.query(
+        `SELECT id FROM cuentas_mp
+         WHERE id = $1 AND sucursal_id = $2 AND activa = TRUE`,
+        [cuenta_mp_id, sucursal_id]
+      )
+      if (!cuenta.rows.length) {
+        throw Object.assign(
+          new Error('Cuenta Mercado Pago inválida para esta sucursal'),
+          { status: 400 }
+        )
+      }
+      cuentaMpId = Number(cuenta_mp_id)
+    }
 
     let total = 0
     const lineas = items.map((it) => {
@@ -85,15 +113,17 @@ router.post('/', async (req, res) => {
     })
 
     const { rows: ventaRows } = await client.query(
-      `INSERT INTO ventas (sucursal_id, cliente_id, total, estado, metodo_pago, notas)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO ventas
+         (sucursal_id, cliente_id, total, estado, metodo_pago, cuenta_mp_id, notas)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         sucursal_id,
         cliente_id || null,
         total,
         estado || 'completada',
-        metodo_pago || 'efectivo',
+        metodo,
+        cuentaMpId,
         notas || null,
       ]
     )
@@ -106,7 +136,6 @@ router.post('/', async (req, res) => {
         [venta.id, linea.producto_id, linea.cantidad, linea.precio_unitario, linea.subtotal]
       )
 
-      // Solo descuenta stock si la venta está completada (no adeuda sin entrega — por ahora siempre)
       if ((estado || 'completada') === 'completada' || estado === 'adeuda') {
         const upd = await client.query(
           `UPDATE stock_sucursal
@@ -121,6 +150,7 @@ router.post('/', async (req, res) => {
             { status: 400 }
           )
         }
+        await sumarAFuturosPedidos(client, linea.producto_id, linea.cantidad)
       }
     }
 
@@ -156,7 +186,6 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
       [venta.id]
     )
 
-    // Devolver stock si la venta había descontado (completada / adeuda)
     if (venta.estado === 'completada' || venta.estado === 'adeuda') {
       for (const d of detalles) {
         if (!d.producto_id) continue
@@ -167,6 +196,7 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
            DO UPDATE SET cantidad = stock_sucursal.cantidad + EXCLUDED.cantidad`,
           [d.producto_id, venta.sucursal_id, d.cantidad]
         )
+        await restarAFuturosPedidos(client, d.producto_id, d.cantidad)
       }
     }
 

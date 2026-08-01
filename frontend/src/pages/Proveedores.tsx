@@ -82,85 +82,152 @@ export default function Proveedores() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="font-display text-3xl tracking-wide text-brand-black">Proveedores</h2>
-        <button type="button" onClick={openCreate} className="btn-primary px-4 py-2 text-sm font-semibold">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="page-title">Proveedores</h2>
+        <button
+          type="button"
+          onClick={openCreate}
+          className="btn-primary px-4 py-2 text-sm font-semibold"
+        >
           Nuevo proveedor
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
-            <tr>
-              <th className="px-4 py-2">Nombre</th>
-              <th className="px-4 py-2">Teléfono</th>
-              <th className="px-4 py-2">Email</th>
-              <th className="px-4 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((p) => (
-              <tr key={p.id} className="border-t border-slate-100">
-                <td className="px-4 py-2 font-medium">{p.nombre}</td>
-                <td className="px-4 py-2 text-slate-500">{p.telefono || '—'}</td>
-                <td className="px-4 py-2 text-slate-500">{p.email || '—'}</td>
-                <td className="px-4 py-2">
-                  <div className="flex gap-1 justify-end">
-                    <button type="button" onClick={() => openEdit(p)} className="p-1.5 rounded hover:bg-slate-100">
-                      <Pencil size={16} />
-                    </button>
-                    <button type="button" onClick={() => void onDelete(p)} className="p-1.5 rounded hover:bg-rose-50 text-rose-600">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </td>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-6">
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-slate-500">
+              <tr>
+                <th className="px-4 py-2">Nombre</th>
+                <th className="px-4 py-2">Teléfono</th>
+                <th className="px-4 py-2">Email</th>
+                <th className="px-4 py-2" />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((p) => (
+                <tr key={p.id} className="border-t border-slate-100">
+                  <td className="px-4 py-2 font-medium">{p.nombre}</td>
+                  <td className="px-4 py-2 text-slate-500">{p.telefono || '—'}</td>
+                  <td className="px-4 py-2 text-slate-500">{p.email || '—'}</td>
+                  <td className="px-4 py-2">
+                    <div className="flex gap-1 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(p)}
+                        className="p-1.5 rounded hover:bg-slate-100"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onDelete(p)}
+                        className="p-1.5 rounded hover:bg-rose-50 text-rose-600"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                    Sin proveedores
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="md:hidden space-y-3">
+          {items.map((p) => (
+            <div key={p.id} className="border border-slate-200 rounded-lg p-4 shadow-sm">
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
+                  <h3 className="font-bold">{p.nombre}</h3>
+                  <p className="text-sm text-slate-500 mt-1">{p.telefono || 'Sin teléfono'}</p>
+                  <p className="text-sm text-slate-500 truncate">{p.email || 'Sin email'}</p>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(p)}
+                    className="p-1.5 rounded hover:bg-slate-100"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onDelete(p)}
+                    className="p-1.5 rounded hover:bg-rose-50 text-rose-600"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {items.length === 0 && (
+            <p className="text-center py-8 text-slate-400 text-sm">Sin proveedores</p>
+          )}
+        </div>
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <form onSubmit={onSubmit} className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50">
+          <form
+            onSubmit={onSubmit}
+            className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-5 space-y-4 max-h-[92vh] overflow-y-auto"
+          >
             <div className="flex items-center justify-between">
-              <h3 className="font-display text-2xl">{editing ? 'Editar proveedor' : 'Nuevo proveedor'}</h3>
-              <button type="button" onClick={() => setShowModal(false)} className="p-1 rounded hover:bg-slate-100">
+              <h3 className="font-display text-2xl">
+                {editing ? 'Editar' : 'Nuevo'} proveedor
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="p-1 rounded hover:bg-slate-100"
+              >
                 <X size={18} />
               </button>
             </div>
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2"
               placeholder="Nombre"
               value={form.nombre}
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
               required
             />
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2"
               placeholder="Teléfono"
               value={form.telefono}
               onChange={(e) => setForm({ ...form, telefono: e.target.value })}
             />
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2"
               placeholder="Email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
             <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2"
               placeholder="Dirección"
               value={form.direccion}
               onChange={(e) => setForm({ ...form, direccion: e.target.value })}
             />
             <div className="flex gap-2">
-              <button type="button" onClick={() => setShowModal(false)} className="flex-1 rounded-lg border border-slate-300 py-2 text-sm font-semibold">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-semibold"
+              >
                 Cancelar
               </button>
-              <button type="submit" className="flex-1 btn-primary py-2 text-sm">
-                {editing ? 'Actualizar' : 'Crear'}
+              <button type="submit" className="flex-1 btn-primary py-2.5 text-sm">
+                Guardar
               </button>
             </div>
           </form>
