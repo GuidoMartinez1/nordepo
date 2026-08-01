@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
        JOIN sucursales s ON s.id = c.sucursal_id
        LEFT JOIN proveedores p ON p.id = c.proveedor_id
        ORDER BY c.fecha DESC
-       LIMIT 200`
+       LIMIT 5000`
     )
     res.json(rows)
   } catch (err) {

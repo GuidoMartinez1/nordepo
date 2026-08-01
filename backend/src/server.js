@@ -19,6 +19,9 @@ import statsRoutes from './routes/stats.js'
 import actualizacionesRoutes from './routes/actualizaciones.js'
 import cuentasMpRoutes from './routes/cuentasMp.js'
 import futurosPedidosRoutes from './routes/futurosPedidos.js'
+import gastosRoutes from './routes/gastos.js'
+import cotizacionesRoutes from './routes/cotizaciones.js'
+import reportesRoutes from './routes/reportes.js'
 import { requireRole } from './middleware/requireAuth.js'
 
 const app = express()
@@ -72,6 +75,9 @@ app.use('/api/futuros-pedidos', futurosPedidosRoutes)
 app.use('/api/traslados', requireRole('admin'), trasladosRoutes)
 app.use('/api/stats', requireRole('admin'), statsRoutes)
 app.use('/api/actualizaciones-precios', actualizacionesRoutes)
+app.use('/api/gastos', requireRole('admin'), gastosRoutes)
+app.use('/api/cotizaciones', requireRole('admin'), cotizacionesRoutes)
+app.use('/api/reportes', requireRole('admin'), reportesRoutes)
 
 app.use((err, _req, res, _next) => {
   console.error('Unhandled error:', err)

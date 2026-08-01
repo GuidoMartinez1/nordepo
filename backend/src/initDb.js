@@ -233,6 +233,28 @@ export async function initDatabase() {
       ON CONFLICT (producto_id, sucursal_id) DO NOTHING
     `)
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cotizaciones (
+        id SERIAL PRIMARY KEY,
+        fecha DATE UNIQUE NOT NULL,
+        valor DECIMAL(12,2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gastos (
+        id SERIAL PRIMARY KEY,
+        concepto VARCHAR(255) NOT NULL,
+        monto DECIMAL(12,2) NOT NULL,
+        moneda VARCHAR(10) NOT NULL DEFAULT 'ARS',
+        monto_ars DECIMAL(12,2) NOT NULL,
+        fecha DATE NOT NULL,
+        categoria VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
     await client.query('CREATE INDEX IF NOT EXISTS idx_productos_categoria ON productos(categoria_id)')
     await client.query('CREATE INDEX IF NOT EXISTS idx_productos_codigo ON productos(codigo)')
     await client.query('CREATE INDEX IF NOT EXISTS idx_stock_sucursal_sucursal ON stock_sucursal(sucursal_id)')
@@ -243,6 +265,8 @@ export async function initDatabase() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_traslados_fecha ON traslados(fecha)')
     await client.query('CREATE INDEX IF NOT EXISTS idx_historial_costos_revisado ON historial_costos(revisado)')
     await client.query('CREATE INDEX IF NOT EXISTS idx_historial_costos_producto ON historial_costos(producto_id)')
+    await client.query('CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha)')
+    await client.query('CREATE INDEX IF NOT EXISTS idx_gastos_categoria ON gastos(categoria)')
 
     // Sucursales: depósito + locales de venta
     await client.query(`

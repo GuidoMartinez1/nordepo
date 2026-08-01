@@ -30,7 +30,7 @@ router.get('/', async (req, res) => {
       `${ventaSelect}
        ${where}
        ORDER BY v.fecha DESC
-       LIMIT 200`,
+       LIMIT 5000`,
       params
     )
     res.json(rows)

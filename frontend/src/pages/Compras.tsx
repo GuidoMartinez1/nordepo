@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ClipboardList, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import api from '../services/api'
 import type { Producto } from '../types'
 
@@ -179,6 +180,29 @@ export default function Compras() {
     } catch {
       toast.error('No se pudo eliminar')
     }
+  }
+
+  function exportarFuturosExcel() {
+    if (!futurosOrdenados.length) {
+      toast.error('No hay futuros pedidos para exportar')
+      return
+    }
+    const rows = futurosOrdenados.map((item, index) => {
+      const cant = parseFloat(String(item.cantidad)) || 0
+      const costo = Number(item.precio_costo) || 0
+      return {
+        '#': index + 1,
+        Producto: item.producto_nombre || item.producto || '',
+        Stock: item.stock_actual ?? '',
+        Cantidad: item.cantidad ?? '',
+        'Costo unitario': costo,
+        'Gasto estimado': cant * costo,
+      }
+    })
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Futuros pedidos')
+    XLSX.writeFile(workbook, 'futuros_pedidos.xlsx')
   }
 
   function stockClass(stock: number | null | undefined) {
@@ -365,6 +389,13 @@ export default function Compras() {
                   <option value="agregacion">Orden de carga</option>
                   <option value="alfabetico">A–Z</option>
                 </select>
+                <button
+                  type="button"
+                  onClick={exportarFuturosExcel}
+                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs font-semibold"
+                >
+                  Exportar Excel
+                </button>
                 <button
                   type="button"
                   onClick={() => setMostrarFuturos(false)}

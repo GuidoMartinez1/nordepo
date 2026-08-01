@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import toast from 'react-hot-toast'
 import { History, Pencil, Plus, ShoppingBag, Trash2, X } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -293,6 +294,31 @@ export default function Productos() {
 
   const hayFiltros = Boolean(q || stockFiltro || categoriaFiltro || gananciaFiltro)
 
+  function exportarExcel() {
+    if (!filtered.length) {
+      toast.error('No hay productos para exportar')
+      return
+    }
+    const rows = filtered.map((p) => ({
+      Nombre: p.nombre,
+      Código: p.codigo || '',
+      Categoría: p.categoria_nombre || '',
+      Costo: Number(p.precio_costo) || 0,
+      'Precio venta': Number(p.precio) || 0,
+      '% ganancia': Number(p.porcentaje_ganancia) || 0,
+      ...(esTodas
+        ? { 'Stock total': p.stock_total ?? p.stock ?? 0 }
+        : {
+            'Stock sucursal': p.stock ?? 0,
+            'Stock total': p.stock_total ?? 0,
+          }),
+    }))
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Productos')
+    XLSX.writeFile(workbook, 'productos.xlsx')
+  }
+
   function limpiarFiltros() {
     setQ('')
     setStockFiltro('')
@@ -358,15 +384,24 @@ export default function Productos() {
             )}
           </p>
         </div>
-        {isAdmin && (
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <button
             type="button"
-            onClick={openCreate}
-            className="btn-primary px-4 py-2 text-sm inline-flex items-center justify-center gap-2"
+            onClick={exportarExcel}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50"
           >
-            <Plus size={16} /> Nuevo producto
+            Exportar Excel
           </button>
-        )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="btn-primary px-4 py-2 text-sm inline-flex items-center justify-center gap-2"
+            >
+              <Plus size={16} /> Nuevo producto
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

@@ -16,6 +16,7 @@ const empty = { nombre: '', telefono: '', email: '', direccion: '' }
 
 export default function Proveedores() {
   const [items, setItems] = useState<Proveedor[]>([])
+  const [busqueda, setBusqueda] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Proveedor | null>(null)
   const [form, setForm] = useState(empty)
@@ -80,6 +81,17 @@ export default function Proveedores() {
     }
   }
 
+  const q = busqueda.trim().toLowerCase()
+  const filtrados = !q
+    ? items
+    : items.filter(
+        (p) =>
+          (p.nombre || '').toLowerCase().includes(q) ||
+          (p.telefono || '').toLowerCase().includes(q) ||
+          (p.email || '').toLowerCase().includes(q) ||
+          (p.direccion || '').toLowerCase().includes(q)
+      )
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -93,6 +105,14 @@ export default function Proveedores() {
         </button>
       </div>
 
+      <input
+        type="text"
+        placeholder="Buscar por nombre, teléfono, email o dirección…"
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        className="w-full md:w-1/2 rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
+      />
+
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-6">
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
@@ -105,7 +125,7 @@ export default function Proveedores() {
               </tr>
             </thead>
             <tbody>
-              {items.map((p) => (
+              {filtrados.map((p) => (
                 <tr key={p.id} className="border-t border-slate-100">
                   <td className="px-4 py-2 font-medium">{p.nombre}</td>
                   <td className="px-4 py-2 text-slate-500">{p.telefono || '—'}</td>
@@ -130,10 +150,10 @@ export default function Proveedores() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
+              {filtrados.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
-                    Sin proveedores
+                    {q ? 'Sin resultados' : 'Sin proveedores'}
                   </td>
                 </tr>
               )}
@@ -142,7 +162,7 @@ export default function Proveedores() {
         </div>
 
         <div className="md:hidden space-y-3">
-          {items.map((p) => (
+          {filtrados.map((p) => (
             <div key={p.id} className="border border-slate-200 rounded-lg p-4 shadow-sm">
               <div className="flex justify-between items-start gap-2">
                 <div className="min-w-0">
@@ -169,8 +189,10 @@ export default function Proveedores() {
               </div>
             </div>
           ))}
-          {items.length === 0 && (
-            <p className="text-center py-8 text-slate-400 text-sm">Sin proveedores</p>
+          {filtrados.length === 0 && (
+            <p className="text-center py-8 text-slate-400 text-sm">
+              {q ? 'Sin resultados' : 'Sin proveedores'}
+            </p>
           )}
         </div>
       </div>

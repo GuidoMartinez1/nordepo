@@ -11,6 +11,8 @@ import {
   Factory,
   TrendingUp,
   Wallet,
+  Receipt,
+  BarChart3,
   LogOut,
   Menu,
   X,
@@ -37,6 +39,8 @@ const links: NavItem[] = [
   { to: '/compras', label: 'Compras', icon: Truck, roles: ['admin'] },
   { to: '/traslados', label: 'Traslados', icon: ArrowLeftRight, roles: ['admin'] },
   { to: '/proveedores', label: 'Proveedores', icon: Factory, roles: ['admin'] },
+  { to: '/gastos', label: 'Gastos', icon: Receipt, roles: ['admin'] },
+  { to: '/reportes', label: 'Reportes', icon: BarChart3, roles: ['admin'] },
   { to: '/cuentas-mp', label: 'Cuentas MP', icon: Wallet, roles: ['admin'] },
   { to: '/actualizaciones', label: 'Actualizaciones', icon: TrendingUp, roles: ['admin'] },
 ]
