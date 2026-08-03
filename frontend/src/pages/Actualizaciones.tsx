@@ -43,7 +43,7 @@ export default function Actualizaciones() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Actualizacion | null>(null)
   const [nuevoPrecioVenta, setNuevoPrecioVenta] = useState('')
-  const [porcentajeManual, setPorcentajeManual] = useState('30')
+  const [porcentajeManual, setPorcentajeManual] = useState('')
   const [margenProyectado, setMargenProyectado] = useState(0)
   const [alcance, setAlcance] = useState<Alcance>('todas')
   const [sucursalDestinoId, setSucursalDestinoId] = useState('')
@@ -97,7 +97,7 @@ export default function Actualizaciones() {
     const venta = precioBaseParaSugerencia(item)
     const sugerido = sugerirPrecio(item, venta)
     setNuevoPrecioVenta(String(sugerido))
-    setPorcentajeManual('30')
+    setPorcentajeManual('')
     setMargenProyectado(calcMargen(sugerido, Number(item.costo_nuevo)))
   }
 
@@ -258,7 +258,7 @@ export default function Actualizaciones() {
               </div>
 
               <div className="md:text-right">
-                <p className="text-[10px] uppercase text-slate-500 font-bold">Venta (prom.)</p>
+                <p className="text-[10px] uppercase text-slate-500 font-bold">Venta (hoy)</p>
                 <p className="font-bold text-lg">{money(Number(item.precio_venta_actual))}</p>
                 <p className={`text-xs font-medium ${esAumento ? 'text-rose-600' : 'text-emerald-600'}`}>
                   Margen hoy: {margenHoy}%
