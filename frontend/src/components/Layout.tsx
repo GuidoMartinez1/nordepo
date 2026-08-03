@@ -81,7 +81,7 @@ export default function Layout({ children }: { children?: ReactNode }) {
           <div className="flex items-center justify-between px-4 pt-4 pb-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <img
-                src="/logo.png"
+                src="/nordepo-logo.png"
                 alt="NORDEPO"
                 className="h-9 w-9 shrink-0 rounded-full object-cover shadow-lime"
               />

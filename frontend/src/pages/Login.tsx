@@ -43,7 +43,7 @@ export default function Login() {
       >
         <div className="flex flex-col items-center text-center gap-3">
           <img
-            src="/logo.png"
+            src="/nordepo-logo.png"
             alt="NORDEPO"
             className="h-24 w-24 rounded-full object-cover shadow-lime"
           />
