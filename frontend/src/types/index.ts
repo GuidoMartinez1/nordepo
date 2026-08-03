@@ -6,20 +6,6 @@ export type Sucursal = {
   es_deposito?: boolean
 }
 
-export type Producto = {
-  id: number
-  nombre: string
-  descripcion?: string | null
-  precio: number
-  precio_costo: number
-  porcentaje_ganancia: number
-  categoria_id?: number | null
-  categoria_nombre?: string | null
-  codigo?: string | null
-  stock?: number
-  stock_total?: number
-}
-
 export type Cliente = {
   id: number
   nombre: string
@@ -40,6 +26,32 @@ export type Venta = {
   cuenta_mp_id?: number | null
   cuenta_mp_nombre?: string | null
   cuenta_mp_alias?: string | null
+  usuario_id?: number | null
+  usuario_nombre?: string | null
+}
+
+export type StockSucursalItem = {
+  sucursal_id: number
+  sucursal_nombre: string
+  es_deposito?: boolean
+  cantidad: number
+  precio?: number
+}
+
+export type Producto = {
+  id: number
+  nombre: string
+  descripcion?: string | null
+  precio: number
+  precio_costo: number
+  porcentaje_ganancia: number
+  categoria_id?: number | null
+  categoria_nombre?: string | null
+  codigo?: string | null
+  stock?: number
+  stock_total?: number
+  stock_por_sucursal?: StockSucursalItem[]
+  precios_por_sucursal?: StockSucursalItem[]
 }
 
 export type CuentaMp = {

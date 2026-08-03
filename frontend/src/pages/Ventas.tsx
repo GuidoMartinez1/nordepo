@@ -1,26 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Eye, ShoppingCart, Trash2, X } from 'lucide-react'
+import { Calendar, Eye, ShoppingCart, Trash2, X } from 'lucide-react'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
 import { useAuth } from '../contexts/AuthContext'
+import { money } from '../utils/money'
 import type { Venta } from '../types'
 
 type Detalle = {
   id: number
-  producto_id: number
+  producto_id: number | null
   producto_nombre?: string | null
+  descripcion?: string | null
   cantidad: number
   precio_unitario: number
   subtotal: number
 }
 
 type VentaDetalle = Venta & { detalles: Detalle[] }
-
-function money(n: number) {
-  return Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
-}
 
 function labelPago(v: Venta) {
   if (v.metodo_pago === 'mercadopago') {
@@ -30,6 +28,10 @@ function labelPago(v: Venta) {
   if (v.metodo_pago === 'tarjeta') return 'Tarjeta'
   if (v.metodo_pago === 'efectivo') return 'Efectivo'
   return v.metodo_pago
+}
+
+function todayLocal() {
+  return new Date().toLocaleDateString('en-CA')
 }
 
 function AccionesVenta({
@@ -76,6 +78,8 @@ export default function Ventas() {
   const [items, setItems] = useState<Venta[]>([])
   const [detalle, setDetalle] = useState<VentaDetalle | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
 
   async function load() {
     const params = sucursalId ? { sucursal_id: sucursalId } : {}
@@ -86,6 +90,16 @@ export default function Ventas() {
   useEffect(() => {
     void load().catch(() => toast.error('Error al cargar ventas'))
   }, [sucursalId])
+
+  const filtradas = useMemo(() => {
+    return items.filter((venta) => {
+      if (!venta.fecha) return false
+      const fechaVenta = new Date(venta.fecha).toLocaleDateString('en-CA')
+      if (fechaDesde && fechaVenta < fechaDesde) return false
+      if (fechaHasta && fechaVenta > fechaHasta) return false
+      return true
+    })
+  }, [items, fechaDesde, fechaHasta])
 
   async function verDetalle(id: number) {
     try {
@@ -140,6 +154,54 @@ export default function Ventas() {
         )}
       </div>
 
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Desde</label>
+          <input
+            type="date"
+            value={fechaDesde}
+            onChange={(e) => setFechaDesde(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Hasta</label>
+          <input
+            type="date"
+            value={fechaHasta}
+            onChange={(e) => setFechaHasta(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
+          />
+        </div>
+        <div className="col-span-2 md:col-span-3 flex flex-wrap gap-2 items-center">
+          <button
+            type="button"
+            onClick={() => {
+              const hoy = todayLocal()
+              setFechaDesde(hoy)
+              setFechaHasta(hoy)
+            }}
+            className="btn-primary px-3 py-2 text-sm font-semibold inline-flex items-center gap-1.5"
+          >
+            <Calendar className="h-4 w-4" />
+            Hoy
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setFechaDesde('')
+              setFechaHasta('')
+            }}
+            className="px-3 py-2 text-sm font-semibold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 inline-flex items-center gap-1"
+          >
+            <X className="h-4 w-4" /> Limpiar
+          </button>
+          <span className="text-xs text-slate-500 ml-auto">
+            {filtradas.length} de {items.length}
+          </span>
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-6">
         {/* Desktop table */}
         <div className="hidden md:block overflow-x-auto">
@@ -149,21 +211,21 @@ export default function Ventas() {
                 <th className="px-4 py-2">#</th>
                 <th className="px-4 py-2">Fecha</th>
                 {esTodas && <th className="px-4 py-2">Sucursal</th>}
-                <th className="px-4 py-2">Cliente</th>
+                <th className="px-4 py-2">Vendedor</th>
                 <th className="px-4 py-2">Pago</th>
                 <th className="px-4 py-2">Total</th>
                 <th className="px-4 py-2 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((v) => (
+              {filtradas.map((v) => (
                 <tr key={v.id} className="border-t border-slate-100">
                   <td className="px-4 py-2">{v.id}</td>
                   <td className="px-4 py-2">{new Date(v.fecha).toLocaleString('es-AR')}</td>
                   {esTodas && (
                     <td className="px-4 py-2 text-slate-600">{v.sucursal_nombre || '—'}</td>
                   )}
-                  <td className="px-4 py-2">{v.cliente_nombre || '—'}</td>
+                  <td className="px-4 py-2">{v.usuario_nombre || '—'}</td>
                   <td className="px-4 py-2">{labelPago(v)}</td>
                   <td className="px-4 py-2 font-semibold">{money(Number(v.total))}</td>
                   <td className="px-4 py-2">
@@ -179,10 +241,10 @@ export default function Ventas() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
+              {filtradas.length === 0 && (
                 <tr>
                   <td colSpan={esTodas ? 7 : 6} className="px-4 py-8 text-center text-slate-400">
-                    Sin ventas todavía
+                    {items.length === 0 ? 'Sin ventas todavía' : 'Sin ventas en ese período'}
                   </td>
                 </tr>
               )}
@@ -190,9 +252,9 @@ export default function Ventas() {
           </table>
         </div>
 
-        {/* Mobile cards — patrón AliMar */}
+        {/* Mobile cards */}
         <div className="md:hidden space-y-3">
-          {items.map((v) => (
+          {filtradas.map((v) => (
             <div
               key={v.id}
               className="border border-slate-200 rounded-lg p-4 shadow-sm bg-slate-50/50"
@@ -222,8 +284,8 @@ export default function Ventas() {
                   </div>
                 )}
                 <div>
-                  <span className="text-xs text-slate-500 block">Cliente</span>
-                  <span className="truncate block">{v.cliente_nombre || '—'}</span>
+                  <span className="text-xs text-slate-500 block">Vendedor</span>
+                  <span className="truncate block">{v.usuario_nombre || '—'}</span>
                 </div>
                 <div>
                   <span className="text-xs text-slate-500 block">Pago</span>
@@ -236,8 +298,10 @@ export default function Ventas() {
               </div>
             </div>
           ))}
-          {items.length === 0 && (
-            <p className="text-center py-8 text-slate-400 text-sm">Sin ventas todavía</p>
+          {filtradas.length === 0 && (
+            <p className="text-center py-8 text-slate-400 text-sm">
+              {items.length === 0 ? 'Sin ventas todavía' : 'Sin ventas en ese período'}
+            </p>
           )}
         </div>
       </div>
@@ -251,7 +315,7 @@ export default function Ventas() {
                 <p className="text-xs text-slate-500">
                   {new Date(detalle.fecha).toLocaleString('es-AR')}
                   {detalle.sucursal_nombre ? ` · ${detalle.sucursal_nombre}` : ''}
-                  {detalle.cliente_nombre ? ` · ${detalle.cliente_nombre}` : ''}
+                  {detalle.usuario_nombre ? ` · ${detalle.usuario_nombre}` : ''}
                 </p>
               </div>
               <button
@@ -277,7 +341,9 @@ export default function Ventas() {
                     {(detalle.detalles || []).map((d) => (
                       <tr key={d.id} className="border-t border-slate-100">
                         <td className="py-2 pr-2">
-                          {d.producto_nombre || `Producto #${d.producto_id}`}
+                          {d.producto_nombre ||
+                            d.descripcion ||
+                            (d.producto_id ? `Producto #${d.producto_id}` : 'Importe directo')}
                         </td>
                         <td className="py-2">{d.cantidad}</td>
                         <td className="py-2">{money(Number(d.precio_unitario))}</td>

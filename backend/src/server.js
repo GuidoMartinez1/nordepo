@@ -10,7 +10,6 @@ import authRoutes from './routes/auth.js'
 import sucursalesRoutes from './routes/sucursales.js'
 import categoriasRoutes from './routes/categorias.js'
 import productosRoutes from './routes/productos.js'
-import clientesRoutes from './routes/clientes.js'
 import proveedoresRoutes from './routes/proveedores.js'
 import ventasRoutes from './routes/ventas.js'
 import comprasRoutes from './routes/compras.js'
@@ -22,6 +21,7 @@ import futurosPedidosRoutes from './routes/futurosPedidos.js'
 import gastosRoutes from './routes/gastos.js'
 import cotizacionesRoutes from './routes/cotizaciones.js'
 import reportesRoutes from './routes/reportes.js'
+import empleadosRoutes from './routes/empleados.js'
 import { requireRole } from './middleware/requireAuth.js'
 
 const app = express()
@@ -64,18 +64,18 @@ app.use((req, res, next) => {
 })
 
 app.use('/api/sucursales', sucursalesRoutes)
-app.use('/api/categorias', requireRole('admin'), categoriasRoutes)
+app.use('/api/categorias', categoriasRoutes)
 app.use('/api/productos', productosRoutes)
-app.use('/api/clientes', clientesRoutes)
 app.use('/api/proveedores', requireRole('admin'), proveedoresRoutes)
 app.use('/api/ventas', ventasRoutes)
 app.use('/api/cuentas-mp', cuentasMpRoutes)
+app.use('/api/empleados', empleadosRoutes)
 app.use('/api/compras', requireRole('admin'), comprasRoutes)
 app.use('/api/futuros-pedidos', futurosPedidosRoutes)
 app.use('/api/traslados', requireRole('admin'), trasladosRoutes)
 app.use('/api/stats', requireRole('admin'), statsRoutes)
 app.use('/api/actualizaciones-precios', actualizacionesRoutes)
-app.use('/api/gastos', requireRole('admin'), gastosRoutes)
+app.use('/api/gastos', gastosRoutes)
 app.use('/api/cotizaciones', requireRole('admin'), cotizacionesRoutes)
 app.use('/api/reportes', requireRole('admin'), reportesRoutes)
 

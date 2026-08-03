@@ -5,12 +5,16 @@ import { getDepositoId } from '../utils/deposito.js'
 
 const router = express.Router()
 
-/** Lista productos. ?sucursal_id=N → stock y precio de esa sucursal. Sin filtro = vista consolidada. */
+/** Lista productos. ?sucursal_id=N → stock y precio de esa sucursal. Sin filtro = vista consolidada.
+ *  Vendedor: solo nombre, precios y stock por sucursal (sin costo ni %).
+ */
 router.get('/', async (req, res) => {
   const sucursalId = req.query.sucursal_id ? Number(req.query.sucursal_id) : null
+  const esVendedor = req.user?.role === 'vendedor'
   try {
-    if (sucursalId) {
-      const { rows } = await pool.query(
+    let rows
+    if (sucursalId && !esVendedor) {
+      const result = await pool.query(
         `SELECT p.id, p.nombre, p.descripcion, p.precio_costo, p.categoria_id, p.codigo,
                 p.created_at, p.updated_at,
                 c.nombre AS categoria_nombre,
@@ -29,23 +33,77 @@ router.get('/', async (req, res) => {
          ORDER BY p.nombre`,
         [sucursalId]
       )
-      return res.json(rows)
+      rows = result.rows
+    } else {
+      const result = await pool.query(
+        `SELECT p.id, p.nombre, p.descripcion, p.precio_costo, p.categoria_id, p.codigo,
+                p.precio, p.porcentaje_ganancia, p.created_at, p.updated_at,
+                c.nombre AS categoria_nombre,
+                COALESCE((
+                  SELECT SUM(ss.cantidad)::int FROM stock_sucursal ss WHERE ss.producto_id = p.id
+                ), 0) AS stock_total,
+                COALESCE((
+                  SELECT SUM(ss.cantidad)::int FROM stock_sucursal ss WHERE ss.producto_id = p.id
+                ), 0) AS stock
+         FROM productos p
+         LEFT JOIN categorias c ON c.id = p.categoria_id
+         ORDER BY p.nombre`
+      )
+      rows = result.rows
     }
 
-    const { rows } = await pool.query(
-      `SELECT p.id, p.nombre, p.descripcion, p.precio_costo, p.categoria_id, p.codigo,
-              p.precio, p.porcentaje_ganancia, p.created_at, p.updated_at,
-              c.nombre AS categoria_nombre,
-              COALESCE((
-                SELECT SUM(ss.cantidad)::int FROM stock_sucursal ss WHERE ss.producto_id = p.id
-              ), 0) AS stock_total,
-              COALESCE((
-                SELECT SUM(ss.cantidad)::int FROM stock_sucursal ss WHERE ss.producto_id = p.id
-              ), 0) AS stock
-       FROM productos p
-       LEFT JOIN categorias c ON c.id = p.categoria_id
-       ORDER BY p.nombre`
-    )
+    if (esVendedor || req.query.detalle_sucursales === '1') {
+      const detail = await pool.query(
+        `SELECT p.id AS producto_id,
+                s.id AS sucursal_id,
+                s.nombre AS sucursal_nombre,
+                s.es_deposito,
+                COALESCE(ss.cantidad, 0)::int AS cantidad,
+                COALESCE(ps.precio, p.precio, 0)::float AS precio
+         FROM productos p
+         CROSS JOIN sucursales s
+         LEFT JOIN stock_sucursal ss
+           ON ss.producto_id = p.id AND ss.sucursal_id = s.id
+         LEFT JOIN precio_sucursal ps
+           ON ps.producto_id = p.id AND ps.sucursal_id = s.id
+         WHERE s.activa = TRUE
+         ORDER BY p.id, s.es_deposito DESC, s.nombre`
+      )
+      const byProduct = new Map()
+      for (const r of detail.rows) {
+        if (!byProduct.has(r.producto_id)) byProduct.set(r.producto_id, [])
+        byProduct.get(r.producto_id).push({
+          sucursal_id: r.sucursal_id,
+          sucursal_nombre: r.sucursal_nombre,
+          es_deposito: r.es_deposito,
+          cantidad: r.cantidad,
+          precio: r.precio,
+        })
+      }
+      rows = rows.map((p) => {
+        const por = byProduct.get(p.id) || []
+        const base = {
+          id: p.id,
+          nombre: p.nombre,
+          categoria_id: p.categoria_id ?? null,
+          categoria_nombre: p.categoria_nombre ?? null,
+          stock_total: p.stock_total ?? p.stock ?? 0,
+          stock_por_sucursal: por,
+          precios_por_sucursal: por.filter((x) => !x.es_deposito),
+        }
+        if (esVendedor) return base
+        return { ...p, stock_por_sucursal: por, precios_por_sucursal: base.precios_por_sucursal }
+      })
+    } else if (esVendedor) {
+      rows = rows.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        categoria_id: p.categoria_id ?? null,
+        categoria_nombre: p.categoria_nombre ?? null,
+        stock_total: p.stock_total ?? p.stock ?? 0,
+      }))
+    }
+
     res.json(rows)
   } catch (err) {
     console.error(err)
@@ -53,7 +111,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-router.get('/:id/historial', async (req, res) => {
+router.get('/:id/historial', requireRole('admin'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT

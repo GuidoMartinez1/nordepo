@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import type { FormEvent } from 'react'
 import toast from 'react-hot-toast'
-import { History, Pencil, Plus, ShoppingBag, Trash2, X } from 'lucide-react'
+import { Eye, History, Pencil, Plus, ShoppingBag, Trash2, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
 import { useAuth } from '../contexts/AuthContext'
+import { money } from '../utils/money'
 import type { Producto } from '../types'
 
 type Categoria = { id: number; nombre: string }
@@ -45,15 +46,87 @@ function calcularPorcentajeGanancia(precioCosto: number, precioVenta: number) {
   return ((precioVenta - precioCosto) / precioCosto) * 100
 }
 
-function money(n: number) {
-  return Number(n).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
-}
-
 function gananciaColor(pct: number) {
   if (pct > 30) return 'text-emerald-700 bg-emerald-50'
   if (pct >= 25) return 'text-lime-800 bg-lime-50'
   if (pct >= 15) return 'text-amber-700 bg-amber-50'
   return 'text-rose-700 bg-rose-50'
+}
+
+function precioDeSucursal(p: Producto, sucursalId: number | null) {
+  if (!sucursalId) return Number(p.precio) || 0
+  const row = p.precios_por_sucursal?.find((s) => s.sucursal_id === sucursalId)
+  return Number(row?.precio ?? p.precio) || 0
+}
+
+function stockDeSucursal(p: Producto, sucursalId: number | null) {
+  if (!sucursalId) return p.stock_total ?? p.stock ?? 0
+  const row = p.stock_por_sucursal?.find((s) => s.sucursal_id === sucursalId)
+  return row?.cantidad ?? p.stock ?? 0
+}
+
+function PrecioLista({ value }: { value: number | string }) {
+  return (
+    <span className="inline-block rounded-md bg-brand-black px-2 py-0.5 text-sm font-bold tabular-nums text-brand-lime">
+      {money(value)}
+    </span>
+  )
+}
+
+function DetalleOtrasSucursales({
+  producto,
+  sucursalId,
+}: {
+  producto: Producto
+  sucursalId: number | null
+}) {
+  const precios = (producto.precios_por_sucursal ?? []).filter(
+    (s) => s.sucursal_id !== sucursalId
+  )
+  const stocks = (producto.stock_por_sucursal ?? []).filter(
+    (s) => s.sucursal_id !== sucursalId
+  )
+  if (precios.length === 0 && stocks.length === 0) {
+    return (
+      <p className="text-xs text-slate-400 px-3 py-2">Sin datos de otras sucursales</p>
+    )
+  }
+  return (
+    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Otras sucursales
+      </p>
+      {precios.map((s) => {
+        const stock =
+          stocks.find((x) => x.sucursal_id === s.sucursal_id)?.cantidad ?? 0
+        return (
+          <div
+            key={`otras-p-${producto.id}-${s.sucursal_id}`}
+            className="flex justify-between gap-3"
+          >
+            <span className="text-slate-600">{s.sucursal_nombre}</span>
+            <span className="font-medium tabular-nums">
+              {money(Number(s.precio))} · stock {stock}
+            </span>
+          </div>
+        )
+      })}
+      {stocks
+        .filter((s) => s.es_deposito || !precios.some((p) => p.sucursal_id === s.sucursal_id))
+        .map((s) => (
+          <div
+            key={`otras-s-${producto.id}-${s.sucursal_id}`}
+            className="flex justify-between gap-3"
+          >
+            <span className="text-slate-600">
+              {s.sucursal_nombre}
+              {s.es_deposito ? ' (depósito)' : ''}
+            </span>
+            <span className="font-medium tabular-nums">stock {s.cantidad}</span>
+          </div>
+        ))}
+    </div>
+  )
 }
 
 export default function Productos() {
@@ -79,20 +152,41 @@ export default function Productos() {
   const [showFuture, setShowFuture] = useState(false)
   const [futureProduct, setFutureProduct] = useState<Producto | null>(null)
   const [futureQty, setFutureQty] = useState('1')
+  const [verOtrasId, setVerOtrasId] = useState<number | null>(null)
+
+  function toggleOtras(id: number) {
+    setVerOtrasId((prev) => (prev === id ? null : id))
+  }
 
   async function load() {
-    const params = sucursalId ? { sucursal_id: sucursalId } : {}
+    if (isAdmin) {
+      const params: Record<string, string | number> = {}
+      if (sucursalId) {
+        params.sucursal_id = sucursalId
+        params.detalle_sucursales = 1
+      }
+      const [prod, cats] = await Promise.all([
+        api.get<Producto[]>('/productos', { params }),
+        api.get<Categoria[]>('/categorias'),
+      ])
+      setItems(prod.data)
+      setCategorias(cats.data)
+      setVerOtrasId(null)
+      return
+    }
+    // Vendedor: precio + stock (detalle plegado) + filtros
     const [prod, cats] = await Promise.all([
-      api.get<Producto[]>('/productos', { params }),
+      api.get<Producto[]>('/productos'),
       api.get<Categoria[]>('/categorias'),
     ])
     setItems(prod.data)
     setCategorias(cats.data)
+    setVerOtrasId(null)
   }
 
   useEffect(() => {
     void load().catch(() => toast.error('No se pudieron cargar productos'))
-  }, [sucursalId])
+  }, [sucursalId, isAdmin])
 
   function emptyPrecios(): PrecioSucursal[] {
     return sucursales.map((s) => ({
@@ -265,7 +359,9 @@ export default function Productos() {
     }
 
     if (stockFiltro) {
-      const stock = p.stock ?? 0
+      const stock = isAdmin
+        ? (p.stock ?? 0)
+        : stockDeSucursal(p, sucursalId)
       if (stockFiltro === '>4') {
         if (stock <= 4) return false
       } else if (stock !== Number(stockFiltro)) {
@@ -281,7 +377,7 @@ export default function Productos() {
       }
     }
 
-    if (gananciaFiltro) {
+    if (isAdmin && gananciaFiltro) {
       const ganancia = Number(p.porcentaje_ganancia) || 0
       const [minStr, maxStr] = gananciaFiltro.split('-')
       const min = Number(minStr)
@@ -292,7 +388,9 @@ export default function Productos() {
     return true
   })
 
-  const hayFiltros = Boolean(q || stockFiltro || categoriaFiltro || gananciaFiltro)
+  const hayFiltros = Boolean(
+    q || stockFiltro || categoriaFiltro || (isAdmin && gananciaFiltro)
+  )
 
   function exportarExcel() {
     if (!filtered.length) {
@@ -374,25 +472,34 @@ export default function Productos() {
         <div>
           <h2 className="page-title">Productos</h2>
           <p className="text-slate-500 text-sm">
-            {esTodas ? (
-              <>Vista consolidada · precio/stock según sucursal al editar</>
+            {isAdmin ? (
+              esTodas ? (
+                <>Vista consolidada · precio/stock según sucursal al editar</>
+              ) : (
+                <>
+                  Precio y stock de{' '}
+                  <span className="font-medium text-brand-black">{sucursal?.nombre}</span>
+                </>
+              )
             ) : (
               <>
                 Precio y stock de{' '}
                 <span className="font-medium text-brand-black">{sucursal?.nombre}</span>
+                {' · '}
+                otras sucursales con el ojito
               </>
             )}
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={exportarExcel}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50"
-          >
-            Exportar Excel
-          </button>
-          {isAdmin && (
+        {isAdmin && (
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={exportarExcel}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+            >
+              Exportar Excel
+            </button>
             <button
               type="button"
               onClick={openCreate}
@@ -400,10 +507,161 @@ export default function Productos() {
             >
               <Plus size={16} /> Nuevo producto
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
+      {!isAdmin ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
+              placeholder="Buscar por nombre…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
+              value={stockFiltro}
+              onChange={(e) => setStockFiltro(e.target.value)}
+            >
+              <option value="">Todos los stocks</option>
+              <option value="0">Stock: 0</option>
+              <option value="1">Stock: 1</option>
+              <option value="2">Stock: 2</option>
+              <option value="3">Stock: 3</option>
+              <option value="4">Stock: 4</option>
+              <option value=">4">Stock: &gt; 4</option>
+            </select>
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
+              value={categoriaFiltro}
+              onChange={(e) => setCategoriaFiltro(e.target.value)}
+            >
+              <option value="">Todas las categorías</option>
+              <option value="none">Sin categoría</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
+            <p>
+              Mostrando <span className="font-semibold text-brand-black">{filtered.length}</span> de{' '}
+              {items.length}
+            </p>
+            {hayFiltros && (
+              <button
+                type="button"
+                onClick={limpiarFiltros}
+                className="text-brand-black underline-offset-2 hover:underline"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-6">
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-500">
+                  <tr>
+                    <th className="px-4 py-2">Producto</th>
+                    <th className="px-4 py-2">Precio</th>
+                    <th className="px-4 py-2 text-center">Stock</th>
+                    <th className="px-4 py-2 w-12" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((p) => {
+                    const precio = precioDeSucursal(p, sucursalId)
+                    const stock = stockDeSucursal(p, sucursalId)
+                    const abierto = verOtrasId === p.id
+                    return (
+                      <Fragment key={p.id}>
+                        <tr className="border-t border-slate-100">
+                          <td className="px-4 py-2 font-medium">{p.nombre}</td>
+                          <td className="px-4 py-2">
+                            <PrecioLista value={precio} />
+                          </td>
+                          <td className="px-4 py-2 text-center font-semibold">{stock}</td>
+                          <td className="px-4 py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => toggleOtras(p.id)}
+                              className={`p-1.5 rounded hover:bg-slate-100 ${
+                                abierto ? 'text-brand-black bg-slate-100' : 'text-slate-500'
+                              }`}
+                              title="Ver otras sucursales"
+                            >
+                              <Eye size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                        {abierto && (
+                          <tr className="border-t border-slate-50">
+                            <td colSpan={4} className="px-4 py-2">
+                              <DetalleOtrasSucursales producto={p} sucursalId={sucursalId} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                        Sin productos
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="md:hidden space-y-3">
+              {filtered.map((p) => {
+                const precio = precioDeSucursal(p, sucursalId)
+                const stock = stockDeSucursal(p, sucursalId)
+                const abierto = verOtrasId === p.id
+                return (
+                  <div key={p.id} className="border border-slate-200 rounded-lg p-4 shadow-sm">
+                    <div className="flex justify-between items-start gap-2">
+                      <h3 className="font-bold text-brand-black">{p.nombre}</h3>
+                      <button
+                        type="button"
+                        onClick={() => toggleOtras(p.id)}
+                        className={`p-1.5 rounded hover:bg-slate-100 shrink-0 ${
+                          abierto ? 'text-brand-black bg-slate-100' : 'text-slate-500'
+                        }`}
+                        title="Ver otras sucursales"
+                      >
+                        <Eye size={16} />
+                      </button>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-xs text-slate-500 block">Precio</span>
+                        <PrecioLista value={precio} />
+                      </div>
+                      <div>
+                        <span className="text-xs text-slate-500 block">Stock</span>
+                        <span className="font-bold">{stock}</span>
+                      </div>
+                    </div>
+                    {abierto && (
+                      <div className="mt-3">
+                        <DetalleOtrasSucursales producto={p} sucursalId={sucursalId} />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <input
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
@@ -476,27 +734,30 @@ export default function Productos() {
                 <th className="px-4 py-2">Costo</th>
                 <th className="px-4 py-2">{esTodas ? 'Venta (ref.)' : 'Venta'}</th>
                 <th className="px-4 py-2">% ganancia</th>
-                <th className="px-4 py-2">{esTodas ? 'Stock total' : 'Stock sucursal'}</th>
-                {!esTodas && <th className="px-4 py-2">Stock total</th>}
+                <th className="px-4 py-2">{esTodas ? 'Stock total' : 'Stock'}</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td className="px-4 py-8 text-center text-slate-400" colSpan={8}>
+                  <td className="px-4 py-8 text-center text-slate-400" colSpan={7}>
                     No hay productos con esos filtros
                   </td>
                 </tr>
               )}
               {filtered.map((p) => {
                 const pct = Number(p.porcentaje_ganancia) || 0
+                const abierto = verOtrasId === p.id
                 return (
-                  <tr key={p.id} className="border-t border-slate-100">
+                  <Fragment key={p.id}>
+                  <tr className="border-t border-slate-100">
                     <td className="px-4 py-2 font-medium">{p.nombre}</td>
                     <td className="px-4 py-2">{p.categoria_nombre || '—'}</td>
-                    <td className="px-4 py-2">{money(Number(p.precio_costo))}</td>
-                    <td className="px-4 py-2 font-medium">{money(Number(p.precio))}</td>
+                    <td className="px-4 py-2 text-slate-500">{money(Number(p.precio_costo))}</td>
+                    <td className="px-4 py-2">
+                      <PrecioLista value={Number(p.precio)} />
+                    </td>
                     <td className="px-4 py-2">
                       <span
                         className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${gananciaColor(pct)}`}
@@ -507,11 +768,20 @@ export default function Productos() {
                     <td className="px-4 py-2 font-semibold">
                       {esTodas ? (p.stock_total ?? p.stock ?? 0) : (p.stock ?? 0)}
                     </td>
-                    {!esTodas && (
-                      <td className="px-4 py-2 text-slate-500">{p.stock_total ?? p.stock ?? 0}</td>
-                    )}
                     <td className="px-4 py-2">
                       <div className="flex gap-1 justify-end">
+                        {!esTodas && (
+                          <button
+                            type="button"
+                            onClick={() => toggleOtras(p.id)}
+                            className={`p-1.5 rounded hover:bg-slate-100 ${
+                              abierto ? 'text-brand-black bg-slate-100' : 'text-slate-600'
+                            }`}
+                            title="Ver otras sucursales"
+                          >
+                            <Eye size={16} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => void verHistorial(p)}
@@ -551,6 +821,14 @@ export default function Productos() {
                       </div>
                     </td>
                   </tr>
+                  {abierto && !esTodas && (
+                    <tr className="border-t border-slate-50">
+                      <td colSpan={7} className="px-4 py-2">
+                        <DetalleOtrasSucursales producto={p} sucursalId={sucursalId} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 )
               })}
             </tbody>
@@ -561,6 +839,7 @@ export default function Productos() {
           {filtered.map((p) => {
             const pct = Number(p.porcentaje_ganancia) || 0
             const stock = esTodas ? (p.stock_total ?? p.stock ?? 0) : (p.stock ?? 0)
+            const abierto = verOtrasId === p.id
             return (
               <div
                 key={p.id}
@@ -572,6 +851,18 @@ export default function Productos() {
                     <p className="text-xs text-slate-500 mt-0.5">{p.categoria_nombre || 'Sin categoría'}</p>
                   </div>
                   <div className="flex gap-0.5 shrink-0">
+                    {!esTodas && (
+                      <button
+                        type="button"
+                        onClick={() => toggleOtras(p.id)}
+                        className={`p-1.5 rounded hover:bg-white ${
+                          abierto ? 'text-brand-black bg-white' : 'text-slate-600'
+                        }`}
+                        title="Ver otras sucursales"
+                      >
+                        <Eye size={16} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => void verHistorial(p)}
@@ -609,7 +900,7 @@ export default function Productos() {
                 <div className="grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 text-sm">
                   <div>
                     <span className="text-xs text-slate-500 block">Venta</span>
-                    <span className="font-bold">{money(Number(p.precio))}</span>
+                    <PrecioLista value={Number(p.precio)} />
                   </div>
                   <div>
                     <span className="text-xs text-slate-500 block">Costo / %</span>
@@ -622,7 +913,7 @@ export default function Productos() {
                   </div>
                   <div>
                     <span className="text-xs text-slate-500 block">
-                      {esTodas ? 'Stock total' : 'Stock sucursal'}
+                      {esTodas ? 'Stock total' : 'Stock'}
                     </span>
                     <span
                       className={`font-bold ${stock <= 4 ? 'text-rose-600' : 'text-emerald-700'}`}
@@ -630,13 +921,12 @@ export default function Productos() {
                       {stock} uds
                     </span>
                   </div>
-                  {!esTodas && (
-                    <div>
-                      <span className="text-xs text-slate-500 block">Stock total</span>
-                      <span className="font-medium">{p.stock_total ?? p.stock ?? 0}</span>
-                    </div>
-                  )}
                 </div>
+                {abierto && !esTodas && (
+                  <div className="mt-3">
+                    <DetalleOtrasSucursales producto={p} sucursalId={sucursalId} />
+                  </div>
+                )}
               </div>
             )
           })}
@@ -930,6 +1220,8 @@ export default function Productos() {
             </div>
           </form>
         </div>
+      )}
+        </>
       )}
     </div>
   )

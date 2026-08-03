@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { Minus, Plus, ShoppingCart, Trash2, X } from 'lucide-react'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
+import { money } from '../utils/money'
 import type { Producto } from '../types'
 
 type Proveedor = { id: number; nombre: string }
@@ -16,10 +17,6 @@ type CartItem = {
   cantidad: number
   precio_unitario: number
   subtotal: number
-}
-
-function money(n: number) {
-  return Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
 }
 
 export default function NuevaCompra() {

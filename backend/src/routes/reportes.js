@@ -76,17 +76,17 @@ router.get('/productos-vendidos', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT
-          p.nombre,
+          COALESCE(p.nombre, dv.descripcion, 'Importe directo') AS nombre,
           cat.nombre AS categoria,
           SUM(dv.cantidad)::float AS cantidad_total
        FROM detalles_venta dv
        JOIN ventas v ON v.id = dv.venta_id
-       JOIN productos p ON p.id = dv.producto_id
+       LEFT JOIN productos p ON p.id = dv.producto_id
        LEFT JOIN categorias cat ON cat.id = p.categoria_id
        WHERE v.fecha::date >= $1::date
          AND v.fecha::date <= $2::date
          ${ventaSucursal}
-       GROUP BY p.id, p.nombre, cat.nombre
+       GROUP BY COALESCE(p.nombre, dv.descripcion, 'Importe directo'), cat.nombre
        ORDER BY cantidad_total DESC`,
       params
     )

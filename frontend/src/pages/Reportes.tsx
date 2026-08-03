@@ -25,14 +25,24 @@ import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
+import { money } from '../utils/money'
 import type { CuentaMp, Venta } from '../types'
 
 type Compra = {
   id: number
   total: number
   fecha: string
-  estado?: string
   proveedor_nombre?: string | null
+}
+
+type Gasto = {
+  id: number
+  concepto: string
+  monto: number
+  moneda: 'ARS' | 'USD'
+  monto_ars: number
+  fecha: string
+  categoria: string
 }
 
 type ReporteDiario = {
@@ -65,15 +75,11 @@ function todayLocal(): string {
   return new Date().toLocaleDateString('en-CA')
 }
 
-function formatPrice(value: number | string | undefined) {
-  if (value === null || value === undefined || value === '') return '$0'
-  return '$' + Number(value).toLocaleString('es-AR')
-}
-
 export default function Reportes() {
   const { sucursalId, sucursal, esTodas } = useSucursal()
   const [ventas, setVentas] = useState<Venta[]>([])
   const [compras, setCompras] = useState<Compra[]>([])
+  const [gastos, setGastos] = useState<Gasto[]>([])
   const [loading, setLoading] = useState(true)
   const [refrescandoResumen, setRefrescandoResumen] = useState(false)
 
@@ -97,14 +103,16 @@ export default function Reportes() {
       try {
         setLoading(true)
         const params = sucursalId ? { sucursal_id: sucursalId } : {}
-        const [ventasRes, comprasRes, cuentasRes] = await Promise.all([
+        const [ventasRes, comprasRes, gastosRes, cuentasRes] = await Promise.all([
           api.get<Venta[]>('/ventas', { params }),
           api.get<Compra[]>('/compras'),
+          api.get<Gasto[]>('/gastos'),
           api.get<CuentaMp[]>('/cuentas-mp', { params: { ...params, todas: '1' } }),
         ])
         if (cancelado) return
         setVentas(ventasRes.data)
         setCompras(comprasRes.data)
+        setGastos(Array.isArray(gastosRes.data) ? gastosRes.data : [])
         setCuentasMp(cuentasRes.data)
         setFiltroCuentaMp('')
 
@@ -188,9 +196,15 @@ export default function Reportes() {
 
   const ventasResumen = filtrarPorFecha(ventas, fechaDesdeResumen, fechaHastaResumen)
   const comprasResumen = filtrarPorFecha(compras, fechaDesdeResumen, fechaHastaResumen)
+  const gastosResumenList = filtrarPorFecha(gastos, fechaDesdeResumen, fechaHastaResumen)
   const ingresosResumen = calcularTotalVentas(ventasResumen)
-  const gastosResumen = calcularTotalCompras(comprasResumen)
-  const balanceResumen = ingresosResumen - gastosResumen
+  const egresosComprasMercaderia = calcularTotalCompras(comprasResumen)
+  const egresosGastosOperativos = gastosResumenList.reduce(
+    (acc, g) => acc + Number(g.monto_ars || 0),
+    0
+  )
+  const egresosTotalesResumen = egresosComprasMercaderia + egresosGastosOperativos
+  const balanceResumen = ingresosResumen - egresosTotalesResumen
 
   const ventasFiltradas = (() => {
     let list = filtrarPorFecha(ventas, fechaDesde, fechaHasta)
@@ -228,12 +242,11 @@ export default function Reportes() {
         const venta = v as Venta
         return {
           'ID Venta': venta.id,
-          Cliente: venta.cliente_nombre || 'Sin cliente',
           Sucursal: venta.sucursal_nombre || '',
+          Vendedor: venta.usuario_nombre || '',
           'Total ($)': venta.total,
           'Método de Pago': venta.metodo_pago,
           'Alias MP': venta.cuenta_mp_alias || '',
-          Estado: venta.estado,
           Fecha: new Date(String(venta.fecha || '')).toLocaleDateString(),
         }
       }
@@ -242,7 +255,6 @@ export default function Reportes() {
           'ID Compra': v.id,
           Proveedor: (v as Compra).proveedor_nombre || 'Sin proveedor',
           'Total ($)': v.total,
-          Estado: (v as Compra).estado || 'completada',
           Fecha: new Date(String(v.fecha || '')).toLocaleDateString(),
         }
       }
@@ -296,11 +308,6 @@ export default function Reportes() {
     if (metodo === 'efectivo') return 'bg-emerald-100 text-emerald-800'
     if (metodo === 'mercadopago') return 'bg-sky-100 text-sky-800'
     return 'bg-violet-100 text-violet-800'
-  }
-
-  function getEstadoBadge(estado?: string) {
-    if (estado === 'adeuda') return 'bg-rose-100 text-rose-800'
-    return 'bg-emerald-100 text-emerald-800'
   }
 
   function toggleCategoria(categoria: string) {
@@ -476,7 +483,7 @@ export default function Reportes() {
               <div>
                 <p className="text-sm text-emerald-600">Monto Total</p>
                 <p className="text-2xl font-bold text-emerald-900">
-                  {formatPrice(calcularTotalVentas(ventasFiltradas))}
+                  {money(calcularTotalVentas(ventasFiltradas))}
                 </p>
               </div>
             </div>
@@ -485,10 +492,10 @@ export default function Reportes() {
               <div>
                 <p className="text-sm text-violet-600">Promedio</p>
                 <p className="text-2xl font-bold text-violet-900">
-                  {formatPrice(
+                  {money(
                     ventasFiltradas.length > 0
-                      ? (calcularTotalVentas(ventasFiltradas) / ventasFiltradas.length).toFixed(2)
-                      : '0.00'
+                      ? calcularTotalVentas(ventasFiltradas) / ventasFiltradas.length
+                      : 0
                   )}
                 </p>
               </div>
@@ -503,7 +510,7 @@ export default function Reportes() {
                     ID
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                    Cliente
+                    Vendedor
                   </th>
                   {esTodas && (
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
@@ -517,9 +524,6 @@ export default function Reportes() {
                     Método
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                    Estado
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
                     Fecha
                   </th>
                 </tr>
@@ -528,23 +532,18 @@ export default function Reportes() {
                 {ventasFiltradas.map((v) => (
                   <tr key={v.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-medium">#{v.id}</td>
-                    <td className="px-4 py-3">{v.cliente_nombre || 'Sin cliente'}</td>
+                    <td className="px-4 py-3">{v.usuario_nombre || '—'}</td>
                     {esTodas && (
                       <td className="px-4 py-3 text-slate-500">{v.sucursal_nombre || '—'}</td>
                     )}
                     <td className="px-4 py-3 font-medium text-emerald-600">
-                      {formatPrice(v.total)}
+                      {money(v.total)}
                     </td>
                     <td className="px-4 py-3">
                       <span
                         className={`px-2 py-1 text-xs rounded-full ${getMetodoBadge(v.metodo_pago)}`}
                       >
                         {labelMetodo(v)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 text-xs rounded-full ${getEstadoBadge(v.estado)}`}>
-                        {v.estado}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-500">
@@ -555,7 +554,7 @@ export default function Reportes() {
                 {ventasFiltradas.length === 0 && (
                   <tr>
                     <td
-                      colSpan={esTodas ? 7 : 6}
+                      colSpan={esTodas ? 6 : 5}
                       className="px-4 py-8 text-center text-slate-400"
                     >
                       Sin ventas en el período
@@ -571,19 +570,14 @@ export default function Reportes() {
               <div key={v.id} className="border border-slate-200 rounded-lg p-4 shadow-sm">
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="text-lg font-bold">Venta #{v.id}</h3>
-                  <span
-                    className={`px-2 py-1 text-xs rounded-full font-medium ${getEstadoBadge(v.estado)}`}
-                  >
-                    {v.estado}
-                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-y-2 text-sm border-t pt-2">
                   <div>
-                    <span className="text-xs text-slate-500 block">Cliente</span>
+                    <span className="text-xs text-slate-500 block">Vendedor</span>
                     <div className="flex items-center">
                       <User className="h-4 w-4 mr-1 text-slate-400" />
                       <span className="font-medium truncate">
-                        {v.cliente_nombre || 'Sin cliente'}
+                        {v.usuario_nombre || '—'}
                       </span>
                     </div>
                   </div>
@@ -607,7 +601,7 @@ export default function Reportes() {
                   <div>
                     <span className="text-xs text-slate-500 block">Total</span>
                     <span className="text-xl font-bold text-emerald-600">
-                      {formatPrice(v.total)}
+                      {money(v.total)}
                     </span>
                   </div>
                 </div>
@@ -653,7 +647,7 @@ export default function Reportes() {
               <div>
                 <p className="text-sm text-rose-600">Monto Total</p>
                 <p className="text-2xl font-bold text-rose-900">
-                  {formatPrice(calcularTotalCompras(comprasFiltradas))}
+                  {money(calcularTotalCompras(comprasFiltradas))}
                 </p>
               </div>
             </div>
@@ -672,9 +666,6 @@ export default function Reportes() {
                     Total
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                    Estado
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">
                     Fecha
                   </th>
                 </tr>
@@ -685,12 +676,7 @@ export default function Reportes() {
                     <td className="px-4 py-3 font-medium">#{c.id}</td>
                     <td className="px-4 py-3">{c.proveedor_nombre || 'Sin proveedor'}</td>
                     <td className="px-4 py-3 font-medium text-rose-600">
-                      {formatPrice(c.total)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-1 text-xs rounded-full bg-emerald-100 text-emerald-800">
-                        {c.estado || 'completada'}
-                      </span>
+                      {money(c.total)}
                     </td>
                     <td className="px-4 py-3 text-slate-500">
                       {new Date(c.fecha || '').toLocaleDateString()}
@@ -699,7 +685,7 @@ export default function Reportes() {
                 ))}
                 {comprasFiltradas.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
                       Sin compras en el período
                     </td>
                   </tr>
@@ -712,7 +698,7 @@ export default function Reportes() {
               <div key={c.id} className="border border-slate-200 rounded-lg p-4 shadow-sm">
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-bold">Compra #{c.id}</h3>
-                  <span className="text-lg font-bold text-rose-600">{formatPrice(c.total)}</span>
+                  <span className="text-lg font-bold text-rose-600">{money(c.total)}</span>
                 </div>
                 <p className="text-sm text-slate-600">{c.proveedor_nombre || 'Sin proveedor'}</p>
                 <p className="text-xs text-slate-500 mt-1">
@@ -741,11 +727,25 @@ export default function Reportes() {
               <div className="space-y-4">
                 <div className="flex justify-between p-3 bg-emerald-50 rounded-lg">
                   <span className="text-emerald-700 font-medium">Ingresos Totales</span>
-                  <span className="text-emerald-900 font-bold">{formatPrice(ingresosResumen)}</span>
+                  <span className="text-emerald-900 font-bold">{money(ingresosResumen)}</span>
+                </div>
+                <div className="flex justify-between p-3 bg-orange-50 rounded-lg">
+                  <span className="text-orange-700 font-medium">
+                    Egresos por compra de mercadería
+                  </span>
+                  <span className="text-orange-900 font-bold">
+                    {money(egresosComprasMercaderia)}
+                  </span>
+                </div>
+                <div className="flex justify-between p-3 bg-amber-50 rounded-lg">
+                  <span className="text-amber-700 font-medium">Gastos operativos</span>
+                  <span className="text-amber-900 font-bold">
+                    {money(egresosGastosOperativos)}
+                  </span>
                 </div>
                 <div className="flex justify-between p-3 bg-rose-50 rounded-lg">
-                  <span className="text-rose-700 font-medium">Gastos Totales</span>
-                  <span className="text-rose-900 font-bold">{formatPrice(gastosResumen)}</span>
+                  <span className="text-rose-700 font-medium">Egresos totales</span>
+                  <span className="text-rose-900 font-bold">{money(egresosTotalesResumen)}</span>
                 </div>
                 <div className="flex justify-between p-3 bg-violet-50 rounded-lg">
                   <span className="text-violet-700 font-medium">Balance Neto</span>
@@ -754,7 +754,7 @@ export default function Reportes() {
                       balanceResumen >= 0 ? 'text-emerald-900' : 'text-rose-900'
                     }`}
                   >
-                    {formatPrice(balanceResumen)}
+                    {money(balanceResumen)}
                   </span>
                 </div>
               </div>
@@ -784,7 +784,7 @@ export default function Reportes() {
                 />
                 <YAxis
                   tick={{ fontSize: 12 }}
-                  tickFormatter={(val) => `$${Number(val).toLocaleString()}`}
+                  tickFormatter={(val) => money(Number(val))}
                 />
                 <Tooltip
                   contentStyle={{
@@ -792,7 +792,7 @@ export default function Reportes() {
                     border: 'none',
                     boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                   }}
-                  formatter={(value) => formatPrice(Number(value))}
+                  formatter={(value) => money(Number(value))}
                   labelFormatter={(label) =>
                     new Date(String(label)).toLocaleDateString('es-AR', { dateStyle: 'long' })
                   }

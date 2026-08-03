@@ -10,22 +10,39 @@ const ventaSelect = `
          s.nombre AS sucursal_nombre,
          c.nombre AS cliente_nombre,
          cmp.nombre AS cuenta_mp_nombre,
-         cmp.alias AS cuenta_mp_alias
+         cmp.alias AS cuenta_mp_alias,
+         u.username AS usuario_nombre
   FROM ventas v
   JOIN sucursales s ON s.id = v.sucursal_id
   LEFT JOIN clientes c ON c.id = v.cliente_id
   LEFT JOIN cuentas_mp cmp ON cmp.id = v.cuenta_mp_id
+  LEFT JOIN users u ON u.id = v.usuario_id
 `
 
 router.get('/', async (req, res) => {
-  const sucursalId = req.query.sucursal_id ? Number(req.query.sucursal_id) : null
+  let sucursalId = req.query.sucursal_id ? Number(req.query.sucursal_id) : null
+  const esVendedor = req.user?.role === 'vendedor'
+  if (esVendedor) {
+    if (!req.user.sucursal_id) {
+      return res.status(403).json({ error: 'Vendedor sin sucursal asignada' })
+    }
+    if (!req.user.id) {
+      return res.status(403).json({ error: 'Usuario no identificado' })
+    }
+    sucursalId = Number(req.user.sucursal_id)
+  }
   try {
     const params = []
-    let where = ''
+    const clauses = []
     if (sucursalId) {
       params.push(sucursalId)
-      where = `WHERE v.sucursal_id = $${params.length}`
+      clauses.push(`v.sucursal_id = $${params.length}`)
     }
+    if (esVendedor) {
+      params.push(Number(req.user.id))
+      clauses.push(`v.usuario_id = $${params.length}`)
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
     const { rows } = await pool.query(
       `${ventaSelect}
        ${where}
@@ -44,6 +61,14 @@ router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(`${ventaSelect} WHERE v.id = $1`, [req.params.id])
     if (!rows.length) return res.status(404).json({ error: 'Venta no encontrada' })
+
+    const venta = rows[0]
+    if (req.user?.role === 'vendedor') {
+      if (Number(venta.usuario_id) !== Number(req.user.id)) {
+        return res.status(403).json({ error: 'No podés ver esta venta' })
+      }
+    }
+
     const detalles = await pool.query(
       `SELECT d.*, p.nombre AS producto_nombre
        FROM detalles_venta d
@@ -51,7 +76,7 @@ router.get('/:id', async (req, res) => {
        WHERE d.venta_id = $1`,
       [req.params.id]
     )
-    res.json({ ...rows[0], detalles: detalles.rows })
+    res.json({ ...venta, detalles: detalles.rows })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Error al obtener venta' })
@@ -61,12 +86,21 @@ router.get('/:id', async (req, res) => {
 /**
  * body: {
  *   sucursal_id, cliente_id?, metodo_pago?, cuenta_mp_id?, estado?, notas?,
- *   items: [{ producto_id, cantidad, precio_unitario }]
+ *   items: [{ producto_id?, cantidad, precio_unitario, descripcion? }]
  * }
+ * Items sin producto_id = importe directo (no descuenta stock).
  */
 router.post('/', async (req, res) => {
-  const { sucursal_id, cliente_id, metodo_pago, cuenta_mp_id, estado, notas, items } =
+  let { sucursal_id, cliente_id, metodo_pago, cuenta_mp_id, estado, notas, items } =
     req.body || {}
+
+  if (req.user?.role === 'vendedor') {
+    if (!req.user.sucursal_id) {
+      return res.status(403).json({ error: 'Vendedor sin sucursal asignada' })
+    }
+    sucursal_id = Number(req.user.sucursal_id)
+  }
+
   if (!sucursal_id) return res.status(400).json({ error: 'sucursal_id es obligatorio' })
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'items es obligatorio' })
@@ -103,19 +137,32 @@ router.post('/', async (req, res) => {
     let total = 0
     const lineas = items.map((it) => {
       const cantidad = Number(it.cantidad)
-      const precio = Number(it.precio_unitario)
-      if (!it.producto_id || !(cantidad > 0)) {
+      const precio = Math.round(Number(it.precio_unitario))
+      const productoId = it.producto_id ? Number(it.producto_id) : null
+      const descripcion = (it.descripcion || '').trim() || null
+      if (!(cantidad > 0) || !(precio >= 0)) {
         throw Object.assign(new Error('Item inválido'), { status: 400 })
+      }
+      if (!productoId && precio <= 0) {
+        throw Object.assign(new Error('Importe directo inválido'), { status: 400 })
       }
       const subtotal = cantidad * precio
       total += subtotal
-      return { producto_id: it.producto_id, cantidad, precio_unitario: precio, subtotal }
+      return {
+        producto_id: productoId,
+        cantidad,
+        precio_unitario: precio,
+        subtotal,
+        descripcion: productoId ? descripcion : descripcion || 'Importe directo',
+      }
     })
+
+    const usuarioId = req.user?.id ? Number(req.user.id) : null
 
     const { rows: ventaRows } = await client.query(
       `INSERT INTO ventas
-         (sucursal_id, cliente_id, total, estado, metodo_pago, cuenta_mp_id, notas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (sucursal_id, cliente_id, total, estado, metodo_pago, cuenta_mp_id, notas, usuario_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         sucursal_id,
@@ -125,16 +172,27 @@ router.post('/', async (req, res) => {
         metodo,
         cuentaMpId,
         notas || null,
+        usuarioId,
       ]
     )
     const venta = ventaRows[0]
 
     for (const linea of lineas) {
       await client.query(
-        `INSERT INTO detalles_venta (venta_id, producto_id, cantidad, precio_unitario, subtotal)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [venta.id, linea.producto_id, linea.cantidad, linea.precio_unitario, linea.subtotal]
+        `INSERT INTO detalles_venta
+           (venta_id, producto_id, cantidad, precio_unitario, subtotal, descripcion)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          venta.id,
+          linea.producto_id,
+          linea.cantidad,
+          linea.precio_unitario,
+          linea.subtotal,
+          linea.descripcion,
+        ]
       )
+
+      if (!linea.producto_id) continue
 
       if ((estado || 'completada') === 'completada' || estado === 'adeuda') {
         const upd = await client.query(

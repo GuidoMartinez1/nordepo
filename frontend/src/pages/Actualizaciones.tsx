@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
+import { money } from '../utils/money'
 
 type PrecioSucursal = {
   sucursal_id: number
@@ -35,14 +36,6 @@ type Actualizacion = {
 }
 
 type Alcance = 'todas' | 'una'
-
-function money(value: number) {
-  return Number(value || 0).toLocaleString('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    maximumFractionDigits: 0,
-  })
-}
 
 export default function Actualizaciones() {
   const { sucursales } = useSucursal()

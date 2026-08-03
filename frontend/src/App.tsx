@@ -9,7 +9,6 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Productos from './pages/Productos'
 import Categorias from './pages/Categorias'
-import Clientes from './pages/Clientes'
 import Proveedores from './pages/Proveedores'
 import Ventas from './pages/Ventas'
 import NuevaVenta from './pages/NuevaVenta'
@@ -20,6 +19,7 @@ import Actualizaciones from './pages/Actualizaciones'
 import CuentasMp from './pages/CuentasMp'
 import Gastos from './pages/Gastos'
 import Reportes from './pages/Reportes'
+import Usuarios from './pages/Usuarios'
 
 export default function App() {
   return (
@@ -51,7 +51,6 @@ export default function App() {
                           </RoleRoute>
                         }
                       />
-                      <Route path="/clientes" element={<Clientes />} />
                       <Route
                         path="/proveedores"
                         element={
@@ -63,7 +62,7 @@ export default function App() {
                       <Route
                         path="/gastos"
                         element={
-                          <RoleRoute roles={['admin']}>
+                          <RoleRoute roles={['admin', 'vendedor']}>
                             <Gastos />
                           </RoleRoute>
                         }
@@ -81,6 +80,14 @@ export default function App() {
                         element={
                           <RoleRoute roles={['admin']}>
                             <CuentasMp />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/usuarios"
+                        element={
+                          <RoleRoute roles={['admin']}>
+                            <Usuarios />
                           </RoleRoute>
                         }
                       />

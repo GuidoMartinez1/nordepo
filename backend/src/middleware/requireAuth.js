@@ -17,6 +17,7 @@ export function requireAuth(req, res, next) {
       id: Number(payload.sub),
       username: payload.username,
       role: payload.role === 'vendedor' ? 'vendedor' : 'admin',
+      sucursal_id: payload.sucursal_id ? Number(payload.sucursal_id) : null,
     }
     next()
   } catch {

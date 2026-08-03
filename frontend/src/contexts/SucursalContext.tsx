@@ -19,10 +19,12 @@ type SucursalContextValue = {
   /** Incluye el depósito */
   todasSucursales: Sucursal[]
   deposito: Sucursal | null
-  /** null = Todas las sucursales de venta */
+  /** null = Todas las sucursales de venta (solo admin) */
   sucursalId: number | null
   sucursal: Sucursal | null
   esTodas: boolean
+  /** Si true, el selector está bloqueado (vendedor) */
+  sucursalFija: boolean
   setSucursalId: (id: number | null) => void
   loading: boolean
   refresh: () => Promise<void>
@@ -38,10 +40,12 @@ function readStoredSucursalId(): number | null {
 }
 
 export function SucursalProvider({ children }: { children: ReactNode }) {
-  const { token } = useAuth()
+  const { token, user, isAdmin } = useAuth()
   const [todasSucursales, setTodasSucursales] = useState<Sucursal[]>([])
   const [sucursalId, setSucursalIdState] = useState<number | null>(() => readStoredSucursalId())
   const [loading, setLoading] = useState(false)
+
+  const sucursalFija = !isAdmin && !!user?.sucursal_id
 
   const sucursales = useMemo(
     () => todasSucursales.filter((s) => !s.es_deposito),
@@ -60,13 +64,6 @@ export function SucursalProvider({ children }: { children: ReactNode }) {
       const { data } = await api.get<Sucursal[]>('/sucursales')
       const activas = data.filter((s) => s.activa)
       setTodasSucursales(activas)
-      const venta = activas.filter((s) => !s.es_deposito)
-      setSucursalIdState((current) => {
-        if (current === null) return null
-        if (venta.some((s) => s.id === current)) return current
-        localStorage.setItem(SUCURSAL_KEY, TODAS_VALUE)
-        return null
-      })
     } finally {
       setLoading(false)
     }
@@ -80,18 +77,44 @@ export function SucursalProvider({ children }: { children: ReactNode }) {
     }
   }, [token, refresh])
 
-  const setSucursalId = useCallback((id: number | null) => {
-    if (id === null) localStorage.setItem(SUCURSAL_KEY, TODAS_VALUE)
-    else localStorage.setItem(SUCURSAL_KEY, String(id))
-    setSucursalIdState(id)
-  }, [])
+  // Vendedor: forzar su sucursal. Admin: validar selección guardada.
+  useEffect(() => {
+    if (!user) return
+    if (!isAdmin && user.sucursal_id) {
+      setSucursalIdState(user.sucursal_id)
+      localStorage.setItem(SUCURSAL_KEY, String(user.sucursal_id))
+      return
+    }
+    if (isAdmin && sucursales.length) {
+      setSucursalIdState((current) => {
+        if (current === null) return null
+        if (sucursales.some((s) => s.id === current)) return current
+        localStorage.setItem(SUCURSAL_KEY, TODAS_VALUE)
+        return null
+      })
+    }
+  }, [user, isAdmin, sucursales])
 
-  const sucursal = useMemo(
-    () => (sucursalId == null ? null : sucursales.find((s) => s.id === sucursalId) ?? null),
-    [sucursales, sucursalId]
+  const setSucursalId = useCallback(
+    (id: number | null) => {
+      if (!isAdmin) return
+      if (id === null) localStorage.setItem(SUCURSAL_KEY, TODAS_VALUE)
+      else localStorage.setItem(SUCURSAL_KEY, String(id))
+      setSucursalIdState(id)
+    },
+    [isAdmin]
   )
 
-  const esTodas = sucursalId === null
+  const sucursal = useMemo(() => {
+    if (sucursalId == null) return null
+    return (
+      sucursales.find((s) => s.id === sucursalId) ??
+      todasSucursales.find((s) => s.id === sucursalId) ??
+      null
+    )
+  }, [sucursales, todasSucursales, sucursalId])
+
+  const esTodas = isAdmin && sucursalId === null
 
   const value = useMemo(
     () => ({
@@ -101,11 +124,23 @@ export function SucursalProvider({ children }: { children: ReactNode }) {
       sucursalId,
       sucursal,
       esTodas,
+      sucursalFija,
       setSucursalId,
       loading,
       refresh,
     }),
-    [sucursales, todasSucursales, deposito, sucursalId, sucursal, esTodas, setSucursalId, loading, refresh]
+    [
+      sucursales,
+      todasSucursales,
+      deposito,
+      sucursalId,
+      sucursal,
+      esTodas,
+      sucursalFija,
+      setSucursalId,
+      loading,
+      refresh,
+    ]
   )
 
   return <SucursalContext.Provider value={value}>{children}</SucursalContext.Provider>

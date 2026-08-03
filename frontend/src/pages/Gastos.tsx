@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import toast from 'react-hot-toast'
 import {
@@ -11,6 +11,8 @@ import {
   X,
 } from 'lucide-react'
 import api from '../services/api'
+import { money } from '../utils/money'
+import { useAuth } from '../contexts/AuthContext'
 
 const CATEGORIAS = [
   { value: 'GASTOS_VARIOS', label: 'Gastos Varios (Papelera, etc.)' },
@@ -34,10 +36,7 @@ function num(v: number | string | undefined) {
 }
 
 function formatArs(v: number | string | undefined) {
-  return (
-    '$' +
-    num(v).toLocaleString('es-AR', { maximumFractionDigits: 0 })
-  )
+  return money(v)
 }
 
 function formatCurrency(amount: number | string | undefined, currency: 'ARS' | 'USD') {
@@ -352,7 +351,88 @@ function GastoForm({
   )
 }
 
+function GastoRapido({ onSave }: { onSave: () => void }) {
+  const [concepto, setConcepto] = useState('')
+  const [monto, setMonto] = useState('')
+  const [saving, setSaving] = useState(false)
+  const conceptoRef = useRef<HTMLInputElement>(null)
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    const descripcion = concepto.trim()
+    const importe = Math.round(num(monto))
+    if (!descripcion || !(importe > 0)) {
+      toast.error('Completá descripción e importe')
+      return
+    }
+    setSaving(true)
+    try {
+      await api.post('/gastos', {
+        concepto: descripcion,
+        monto: importe,
+        moneda: 'ARS',
+        categoria: 'OTROS',
+        fecha: todayLocal(),
+      })
+      toast.success('Gasto registrado')
+      setConcepto('')
+      setMonto('')
+      onSave()
+      conceptoRef.current?.focus()
+    } catch {
+      toast.error('No se pudo registrar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-6 space-y-4 max-w-lg"
+    >
+      <h3 className="font-semibold text-brand-black flex items-center gap-2">
+        <PlusCircle className="h-5 w-5" /> Nuevo gasto
+      </h3>
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Descripción</label>
+        <input
+          ref={conceptoRef}
+          type="text"
+          value={concepto}
+          onChange={(e) => setConcepto(e.target.value)}
+          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+          placeholder="Ej: Papelera, café, envío…"
+          required
+          autoFocus
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Importe</label>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          value={monto}
+          onChange={(e) => setMonto(e.target.value)}
+          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm"
+          placeholder="0"
+          required
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={saving}
+        className="w-full btn-primary py-2.5 text-sm font-semibold disabled:opacity-50"
+      >
+        {saving ? 'Guardando…' : 'Registrar gasto'}
+      </button>
+    </form>
+  )
+}
+
 export default function Gastos() {
+  const { isAdmin } = useAuth()
   const [gastos, setGastos] = useState<Gasto[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Gasto | null>(null)
@@ -401,6 +481,37 @@ export default function Gastos() {
   })
 
   const totalArs = filtrados.reduce((s, g) => s + num(g.monto_ars), 0)
+
+  if (!isAdmin) {
+    const recientes = gastos.slice(0, 20)
+    return (
+      <div className="space-y-6 max-w-lg">
+        <div>
+          <h2 className="page-title">Gastos</h2>
+          <p className="text-slate-500 text-sm">Cargá un gasto con descripción e importe</p>
+        </div>
+        <GastoRapido onSave={() => void load()} />
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+          <h3 className="font-semibold text-sm text-brand-black">Tus últimos gastos</h3>
+          {loading && <p className="text-sm text-slate-400">Cargando…</p>}
+          {!loading && recientes.length === 0 && (
+            <p className="text-sm text-slate-400">Todavía no cargaste gastos</p>
+          )}
+          <ul className="divide-y divide-slate-100">
+            {recientes.map((g) => (
+              <li key={g.id} className="py-2.5 flex justify-between gap-3 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{g.concepto}</p>
+                  <p className="text-xs text-slate-500">{formatDateUTC(g.fecha)}</p>
+                </div>
+                <span className="font-semibold tabular-nums shrink-0">{formatArs(g.monto_ars)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

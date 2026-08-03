@@ -1,5 +1,6 @@
 import express from 'express'
 import pool from '../db.js'
+import { requireRole } from '../middleware/requireAuth.js'
 
 const router = express.Router()
 
@@ -15,7 +16,7 @@ router.get('/', async (_req, res) => {
   }
 })
 
-router.post('/', async (req, res) => {
+router.post('/', requireRole('admin'), async (req, res) => {
   const nombre = (req.body?.nombre || '').trim()
   if (!nombre) return res.status(400).json({ error: 'nombre es obligatorio' })
   try {
@@ -35,7 +36,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireRole('admin'), async (req, res) => {
   const nombre = (req.body?.nombre || '').trim()
   try {
     const { rows } = await pool.query(
@@ -54,7 +55,7 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     const { rowCount } = await pool.query('DELETE FROM categorias WHERE id = $1', [req.params.id])
     if (!rowCount) return res.status(404).json({ error: 'Categoría no encontrada' })

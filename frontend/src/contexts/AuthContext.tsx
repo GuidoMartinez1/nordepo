@@ -11,7 +11,13 @@ import api, { AUTH_TOKEN_KEY } from '../services/api'
 
 export type UserRole = 'admin' | 'vendedor'
 
-export type AuthUser = { id: number; username: string; role: UserRole }
+export type AuthUser = {
+  id: number
+  username: string
+  role: UserRole
+  sucursal_id?: number | null
+  sucursal_nombre?: string | null
+}
 
 type AuthContextValue = {
   user: AuthUser | null
@@ -32,8 +38,14 @@ function applyAxiosToken(token: string | null) {
   }
 }
 
-function normalizeRole(role: unknown): UserRole {
-  return role === 'vendedor' ? 'vendedor' : 'admin'
+function normalizeUser(data: AuthUser): AuthUser {
+  const role: UserRole = data.role === 'vendedor' ? 'vendedor' : 'admin'
+  return {
+    ...data,
+    role,
+    sucursal_id: role === 'vendedor' ? data.sucursal_id ?? null : null,
+    sucursal_nombre: role === 'vendedor' ? data.sucursal_nombre ?? null : null,
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -52,12 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(stored)
     api
       .get<AuthUser>('/auth/me')
-      .then((res) =>
-        setUser({
-          ...res.data,
-          role: normalizeRole(res.data.role),
-        })
-      )
+      .then((res) => setUser(normalizeUser(res.data)))
       .catch(() => {
         localStorage.removeItem(AUTH_TOKEN_KEY)
         setToken(null)
@@ -74,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(AUTH_TOKEN_KEY, data.token)
     applyAxiosToken(data.token)
     setToken(data.token)
-    setUser({ ...data.user, role: normalizeRole(data.user.role) })
+    setUser(normalizeUser(data.user))
   }, [])
 
   const logout = useCallback(() => {

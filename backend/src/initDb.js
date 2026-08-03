@@ -32,10 +32,12 @@ export async function initDatabase() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
-        username VARCHAR(100) UNIQUE NOT NULL,
+        username VARCHAR(100) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(20) NOT NULL DEFAULT 'admin'
           CHECK (role IN ('admin', 'vendedor')),
+        activo BOOLEAN NOT NULL DEFAULT TRUE,
+        sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `)
@@ -44,7 +46,34 @@ export async function initDatabase() {
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'admin'
     `)
+    await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS activo BOOLEAN NOT NULL DEFAULT TRUE
+    `)
+    await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS sucursal_id INTEGER REFERENCES sucursales(id) ON DELETE SET NULL
+    `)
     await client.query(`UPDATE users SET role = 'admin' WHERE role IS NULL OR role = ''`)
+    await client.query(`UPDATE users SET activo = TRUE WHERE activo IS NULL`)
+
+    // Username único solo entre activos (permite recrear al vendedor en otra sucursal)
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'users_username_key' AND conrelid = 'users'::regclass
+        ) THEN
+          ALTER TABLE users DROP CONSTRAINT users_username_key;
+        END IF;
+      END $$;
+    `)
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS users_username_activo_unique
+      ON users (username)
+      WHERE activo = TRUE
+    `)
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS categorias (
@@ -135,6 +164,10 @@ export async function initDatabase() {
       ALTER TABLE ventas
       ADD COLUMN IF NOT EXISTS cuenta_mp_id INTEGER REFERENCES cuentas_mp(id) ON DELETE SET NULL
     `)
+    await client.query(`
+      ALTER TABLE ventas
+      ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES users(id) ON DELETE SET NULL
+    `)
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS detalles_venta (
@@ -143,8 +176,13 @@ export async function initDatabase() {
         producto_id INTEGER REFERENCES productos(id) ON DELETE SET NULL,
         cantidad INTEGER NOT NULL CHECK (cantidad > 0),
         precio_unitario DECIMAL(12,2) NOT NULL,
-        subtotal DECIMAL(12,2) NOT NULL
+        subtotal DECIMAL(12,2) NOT NULL,
+        descripcion VARCHAR(255)
       )
+    `)
+    await client.query(`
+      ALTER TABLE detalles_venta
+      ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255)
     `)
 
     await client.query(`
@@ -251,8 +289,13 @@ export async function initDatabase() {
         monto_ars DECIMAL(12,2) NOT NULL,
         fecha DATE NOT NULL,
         categoria VARCHAR(50) NOT NULL,
+        usuario_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `)
+    await client.query(`
+      ALTER TABLE gastos
+      ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES users(id) ON DELETE SET NULL
     `)
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_productos_categoria ON productos(categoria_id)')

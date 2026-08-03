@@ -1,10 +1,28 @@
 import express from 'express'
 import pool from '../db.js'
+import { requireRole } from '../middleware/requireAuth.js'
 
 const router = express.Router()
 
-router.get('/', async (_req, res) => {
+function todayLocal() {
+  return new Date().toLocaleDateString('en-CA')
+}
+
+router.get('/', async (req, res) => {
   try {
+    const esVendedor = req.user?.role === 'vendedor'
+    if (esVendedor) {
+      if (!req.user?.id) {
+        return res.status(403).json({ error: 'Usuario no identificado' })
+      }
+      const { rows } = await pool.query(
+        `SELECT * FROM gastos
+         WHERE usuario_id = $1
+         ORDER BY fecha DESC, created_at DESC`,
+        [req.user.id]
+      )
+      return res.json(rows)
+    }
     const { rows } = await pool.query(
       'SELECT * FROM gastos ORDER BY fecha DESC, created_at DESC'
     )
@@ -32,18 +50,28 @@ async function resolverMontoArs(moneda, monto, fecha) {
   return Number(monto) * cotizacion
 }
 
+/** Alta simple: concepto + monto. Fecha/categoría/moneda opcionales (defaults). */
 router.post('/', async (req, res) => {
   try {
-    const { concepto, monto, fecha, moneda = 'ARS', categoria } = req.body
-    if (!concepto?.trim() || monto == null || !fecha || !categoria) {
-      return res.status(400).json({ error: 'Faltan campos obligatorios' })
+    const {
+      concepto,
+      monto,
+      fecha = todayLocal(),
+      moneda = 'ARS',
+      categoria = 'OTROS',
+    } = req.body || {}
+
+    if (!concepto?.trim() || monto == null || !(Number(monto) > 0)) {
+      return res.status(400).json({ error: 'Descripción e importe son obligatorios' })
     }
+
     const monedaNorm = moneda === 'USD' ? 'USD' : 'ARS'
     const monto_ars = await resolverMontoArs(monedaNorm, monto, fecha)
+    const usuarioId = req.user?.id ? Number(req.user.id) : null
     const { rows } = await pool.query(
-      `INSERT INTO gastos (concepto, monto, fecha, moneda, monto_ars, categoria)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [concepto.trim(), monto, fecha, monedaNorm, monto_ars, categoria]
+      `INSERT INTO gastos (concepto, monto, fecha, moneda, monto_ars, categoria, usuario_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [concepto.trim(), monto, fecha, monedaNorm, monto_ars, categoria, usuarioId]
     )
     res.status(201).json(rows[0])
   } catch (err) {
@@ -53,7 +81,7 @@ router.post('/', async (req, res) => {
   }
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireRole('admin'), async (req, res) => {
   try {
     const { concepto, monto, fecha, moneda = 'ARS', categoria } = req.body
     if (!concepto?.trim() || monto == null || !fecha || !categoria) {
@@ -76,7 +104,7 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     const { rowCount } = await pool.query('DELETE FROM gastos WHERE id = $1', [req.params.id])
     if (!rowCount) return res.status(404).json({ error: 'Gasto no encontrado' })

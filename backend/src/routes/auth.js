@@ -14,6 +14,17 @@ function normalizeRole(role) {
   return role === 'vendedor' ? 'vendedor' : 'admin'
 }
 
+function mapUser(row) {
+  const role = normalizeRole(row.role)
+  return {
+    id: row.id,
+    username: row.username,
+    role,
+    sucursal_id: role === 'vendedor' ? row.sucursal_id ?? null : null,
+    sucursal_nombre: role === 'vendedor' ? row.sucursal_nombre ?? null : null,
+  }
+}
+
 router.post('/login', async (req, res) => {
   const username = (req.body?.username || '').trim()
   const password = req.body?.password || ''
@@ -24,7 +35,15 @@ router.post('/login', async (req, res) => {
 
   try {
     const result = await pool.query(
-      'SELECT id, username, password_hash, role FROM users WHERE username = $1',
+      `SELECT u.id, u.username, u.password_hash, u.role,
+              COALESCE(u.activo, TRUE) AS activo,
+              u.sucursal_id,
+              s.nombre AS sucursal_nombre
+       FROM users u
+       LEFT JOIN sucursales s ON s.id = u.sucursal_id
+       WHERE u.username = $1 AND COALESCE(u.activo, TRUE) = TRUE
+       ORDER BY u.id DESC
+       LIMIT 1`,
       [username]
     )
     if (result.rows.length === 0) {
@@ -41,24 +60,55 @@ router.post('/login', async (req, res) => {
       return res.status(500).json({ error: 'Error de configuración del servidor' })
     }
 
-    const role = normalizeRole(user.role)
-    const token = jwt.sign({ username: user.username, role }, secret, {
-      subject: String(user.id),
-      expiresIn: getJwtExpiresIn(),
-    })
+    const mapped = mapUser(user)
+    if (mapped.role === 'vendedor' && !mapped.sucursal_id) {
+      return res.status(403).json({
+        error: 'Este vendedor no tiene sucursal asignada. Pedile al admin que lo dé de alta de nuevo.',
+      })
+    }
 
-    res.json({
-      token,
-      user: { id: user.id, username: user.username, role },
-    })
+    const token = jwt.sign(
+      {
+        username: mapped.username,
+        role: mapped.role,
+        sucursal_id: mapped.sucursal_id,
+      },
+      secret,
+      {
+        subject: String(mapped.id),
+        expiresIn: getJwtExpiresIn(),
+      }
+    )
+
+    res.json({ token, user: mapped })
   } catch (err) {
     console.error('Error en login:', err)
     res.status(500).json({ error: 'Error al iniciar sesión' })
   }
 })
 
-router.get('/me', requireAuth, (req, res) => {
-  res.json({ id: req.user.id, username: req.user.username, role: req.user.role })
+router.get('/me', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.username, u.role, u.sucursal_id, s.nombre AS sucursal_nombre,
+              COALESCE(u.activo, TRUE) AS activo
+       FROM users u
+       LEFT JOIN sucursales s ON s.id = u.sucursal_id
+       WHERE u.id = $1`,
+      [req.user.id]
+    )
+    if (!rows.length || !rows[0].activo) {
+      return res.status(401).json({ error: 'Sesión inválida' })
+    }
+    const mapped = mapUser(rows[0])
+    if (mapped.role === 'vendedor' && !mapped.sucursal_id) {
+      return res.status(403).json({ error: 'Vendedor sin sucursal asignada' })
+    }
+    res.json(mapped)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Error al obtener usuario' })
+  }
 })
 
 router.post('/logout', requireAuth, (_req, res) => {

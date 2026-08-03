@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Calendar, X } from 'lucide-react'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
+import { money } from '../utils/money'
 import type { Venta } from '../types'
 
 type BajoStock = {
@@ -38,10 +39,6 @@ function toDateStr(raw: string) {
   const month = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
-}
-
-function formatMoney(n: number) {
-  return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
 }
 
 export default function Dashboard() {
@@ -93,7 +90,7 @@ export default function Dashboard() {
 
   const cards = [
     { title: 'Total ventas', value: String(totalVentas) },
-    { title: 'Ingresos', value: formatMoney(totalIngresos) },
+    { title: 'Ingresos', value: money(totalIngresos) },
     {
       title: 'Productos',
       value: String(meta?.total_productos ?? '—'),

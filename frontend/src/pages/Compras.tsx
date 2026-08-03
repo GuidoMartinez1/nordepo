@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { ClipboardList, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import api from '../services/api'
+import { money } from '../utils/money'
 import type { Producto } from '../types'
 
 type Compra = {
@@ -36,10 +37,6 @@ type FuturoPedido = {
 }
 
 type OrdenFuturos = 'agregacion' | 'alfabetico'
-
-function money(n: number) {
-  return Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
-}
 
 export default function Compras() {
   const [compras, setCompras] = useState<Compra[]>([])
