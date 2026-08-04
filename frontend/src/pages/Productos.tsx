@@ -1,13 +1,19 @@
 import { useEffect, useState, Fragment } from 'react'
 import type { FormEvent } from 'react'
 import toast from 'react-hot-toast'
-import { Eye, History, Pencil, Plus, ShoppingBag, Trash2, X } from 'lucide-react'
+import { Eye, History, Pencil, Plus, ShoppingBag, Trash2, WifiOff, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
 import { useAuth } from '../contexts/AuthContext'
 import { money } from '../utils/money'
 import type { Producto } from '../types'
+import {
+  formatCacheSavedAt,
+  loadProductosOfflineCache,
+  productosOfflineScopeKey,
+  saveProductosOfflineCache,
+} from '../utils/productosOfflineCache'
 
 type Categoria = { id: number; nombre: string }
 type StockSucursal = {
@@ -153,39 +159,112 @@ export default function Productos() {
   const [futureProduct, setFutureProduct] = useState<Producto | null>(null)
   const [futureQty, setFutureQty] = useState('1')
   const [verOtrasId, setVerOtrasId] = useState<number | null>(null)
+  const [modoOffline, setModoOffline] = useState(false)
+  const [cacheGuardadoEn, setCacheGuardadoEn] = useState<string | null>(null)
 
   function toggleOtras(id: number) {
     setVerOtrasId((prev) => (prev === id ? null : id))
   }
 
-  async function load() {
-    if (isAdmin) {
-      const params: Record<string, string | number> = {}
-      if (sucursalId) {
-        params.sucursal_id = sucursalId
-        params.detalle_sucursales = 1
+  function scopeKey() {
+    return productosOfflineScopeKey(isAdmin, sucursalId)
+  }
+
+  function exigirConexion(accion = 'esta acción') {
+    if (modoOffline || !navigator.onLine) {
+      toast.error(`Sin conexión: no se puede ${accion}. Solo lectura del listado en caché.`)
+      return false
+    }
+    return true
+  }
+
+  function aplicarCacheOffline(mensaje?: string) {
+    const cache = loadProductosOfflineCache(scopeKey())
+    if (cache?.productos?.length) {
+      setItems(cache.productos)
+      if (cache.categorias?.length) setCategorias(cache.categorias)
+      setCacheGuardadoEn(cache.savedAt)
+      setModoOffline(true)
+      setVerOtrasId(null)
+      toast(
+        mensaje
+          ? `Sin conexión. Mostrando caché (${formatCacheSavedAt(cache.savedAt)}).`
+          : `Modo sin conexión — caché del ${formatCacheSavedAt(cache.savedAt)}`,
+        { icon: '📴' }
+      )
+      return true
+    }
+    setModoOffline(true)
+    toast.error(
+      mensaje ||
+        'Sin conexión y no hay listado en caché para esta sucursal. Entrá una vez con red para guardarlo.'
+    )
+    return false
+  }
+
+  async function load(opts?: { silencioso?: boolean }) {
+    try {
+      if (isAdmin) {
+        const params: Record<string, string | number> = {}
+        if (sucursalId) {
+          params.sucursal_id = sucursalId
+          params.detalle_sucursales = 1
+        }
+        const [prod, cats] = await Promise.all([
+          api.get<Producto[]>('/productos', { params }),
+          api.get<Categoria[]>('/categorias'),
+        ])
+        setItems(prod.data)
+        setCategorias(cats.data)
+        setVerOtrasId(null)
+        saveProductosOfflineCache(scopeKey(), prod.data, cats.data)
+        setCacheGuardadoEn(new Date().toISOString())
+        setModoOffline(false)
+        if (opts?.silencioso) toast.success('Conexión restablecida — listado actualizado')
+        return
       }
+      // Vendedor: precio + stock (detalle plegado) + filtros
       const [prod, cats] = await Promise.all([
-        api.get<Producto[]>('/productos', { params }),
+        api.get<Producto[]>('/productos'),
         api.get<Categoria[]>('/categorias'),
       ])
       setItems(prod.data)
       setCategorias(cats.data)
       setVerOtrasId(null)
-      return
+      saveProductosOfflineCache(scopeKey(), prod.data, cats.data)
+      setCacheGuardadoEn(new Date().toISOString())
+      setModoOffline(false)
+      if (opts?.silencioso) toast.success('Conexión restablecida — listado actualizado')
+    } catch {
+      aplicarCacheOffline(opts?.silencioso ? undefined : 'No se pudieron cargar productos')
     }
-    // Vendedor: precio + stock (detalle plegado) + filtros
-    const [prod, cats] = await Promise.all([
-      api.get<Producto[]>('/productos'),
-      api.get<Categoria[]>('/categorias'),
-    ])
-    setItems(prod.data)
-    setCategorias(cats.data)
-    setVerOtrasId(null)
   }
 
   useEffect(() => {
-    void load().catch(() => toast.error('No se pudieron cargar productos'))
+    void load()
+
+    const onOnline = () => {
+      void load({ silencioso: true })
+    }
+    const onOffline = () => {
+      const cache = loadProductosOfflineCache(scopeKey())
+      if (cache?.productos?.length) {
+        setItems(cache.productos)
+        if (cache.categorias?.length) setCategorias(cache.categorias)
+        setCacheGuardadoEn(cache.savedAt)
+        setModoOffline(true)
+        toast('Sin conexión: mostrando listado en caché', { icon: '📴' })
+      } else {
+        setModoOffline(true)
+      }
+    }
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarga al cambiar sucursal/rol
   }, [sucursalId, isAdmin])
 
   function emptyPrecios(): PrecioSucursal[] {
@@ -207,6 +286,7 @@ export default function Productos() {
   }
 
   function openCreate() {
+    if (!exigirConexion('crear productos')) return
     setEditing(null)
     setForm(emptyForm())
     setStockPorSucursal(emptyStock())
@@ -215,6 +295,7 @@ export default function Productos() {
   }
 
   async function openEdit(producto: Producto) {
+    if (!exigirConexion('editar productos')) return
     try {
       const { data } = await api.get<
         Producto & {
@@ -299,6 +380,7 @@ export default function Productos() {
   }
 
   async function onDelete(producto: Producto) {
+    if (!exigirConexion('eliminar productos')) return
     if (!confirm(`¿Eliminar “${producto.nombre}”?`)) return
     try {
       await api.delete(`/productos/${producto.id}`)
@@ -311,6 +393,7 @@ export default function Productos() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
+    if (!exigirConexion('guardar productos')) return
     setSaving(true)
     try {
       const first = preciosPorSucursal[0]
@@ -393,6 +476,7 @@ export default function Productos() {
   )
 
   function exportarExcel() {
+    if (!exigirConexion('exportar Excel')) return
     if (!filtered.length) {
       toast.error('No hay productos para exportar')
       return
@@ -425,6 +509,7 @@ export default function Productos() {
   }
 
   async function verHistorial(producto: Producto) {
+    if (!exigirConexion('ver el historial de costos')) return
     try {
       const { data } = await api.get<
         { fecha: string; proveedor: string; cantidad: number; costo: number }[]
@@ -438,6 +523,7 @@ export default function Productos() {
   }
 
   function openFuture(producto: Producto) {
+    if (!exigirConexion('agregar a futuros pedidos')) return
     setFutureProduct(producto)
     setFutureQty('1')
     setShowFuture(true)
@@ -445,6 +531,7 @@ export default function Productos() {
 
   async function addToFuture(e: FormEvent) {
     e.preventDefault()
+    if (!exigirConexion('agregar a futuros pedidos')) return
     if (!futureProduct) return
     try {
       const { data: pedidos } = await api.get<{ producto_id: number | null }[]>(
@@ -496,20 +583,50 @@ export default function Productos() {
             <button
               type="button"
               onClick={exportarExcel}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+              disabled={modoOffline}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Exportar Excel
             </button>
             <button
               type="button"
               onClick={openCreate}
-              className="btn-primary px-4 py-2 text-sm inline-flex items-center justify-center gap-2"
+              disabled={modoOffline}
+              className="btn-primary px-4 py-2 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus size={16} /> Nuevo producto
             </button>
           </div>
         )}
       </div>
+
+      {modoOffline && (
+        <div
+          className="rounded-xl border-2 border-amber-500 bg-amber-50 px-4 py-3 flex gap-3 items-start shadow-sm"
+          role="status"
+        >
+          <WifiOff className="h-6 w-6 text-amber-700 shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="font-bold text-amber-900 text-sm sm:text-base">
+              Sin conexión — listado de productos en caché
+            </p>
+            <p className="text-amber-800 text-xs sm:text-sm mt-1">
+              Estás viendo la última copia guardada en este dispositivo
+              {cacheGuardadoEn ? ` (${formatCacheSavedAt(cacheGuardadoEn)})` : ''}
+              {sucursal?.nombre ? ` · sucursal: ${sucursal.nombre}` : esTodas ? ' · vista consolidada' : ''}
+              . Stock y precios pueden estar desactualizados. No podés crear, editar ni eliminar
+              hasta recuperar internet.
+            </p>
+            <button
+              type="button"
+              onClick={() => void load({ silencioso: true })}
+              className="mt-2 text-xs font-semibold text-amber-900 underline hover:no-underline"
+            >
+              Reintentar conexión
+            </button>
+          </div>
+        </div>
+      )}
 
       {!isAdmin ? (
         <>
@@ -785,8 +902,9 @@ export default function Productos() {
                         <button
                           type="button"
                           onClick={() => void verHistorial(p)}
-                          className="p-1.5 rounded hover:bg-slate-100 text-slate-600"
-                          title="Historial de costos"
+                          disabled={modoOffline}
+                          className="p-1.5 rounded hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                          title={modoOffline ? 'Sin conexión' : 'Historial de costos'}
                         >
                           <History size={16} />
                         </button>
@@ -795,24 +913,27 @@ export default function Productos() {
                             <button
                               type="button"
                               onClick={() => openFuture(p)}
-                              className="p-1.5 rounded hover:bg-slate-100 text-slate-600"
-                              title="Agregar a futuros pedidos"
+                              disabled={modoOffline}
+                              className="p-1.5 rounded hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={modoOffline ? 'Sin conexión' : 'Agregar a futuros pedidos'}
                             >
                               <ShoppingBag size={16} />
                             </button>
                             <button
                               type="button"
                               onClick={() => void openEdit(p)}
-                              className="p-1.5 rounded hover:bg-slate-100 text-slate-600"
-                              title="Editar"
+                              disabled={modoOffline}
+                              className="p-1.5 rounded hover:bg-slate-100 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={modoOffline ? 'Sin conexión' : 'Editar'}
                             >
                               <Pencil size={16} />
                             </button>
                             <button
                               type="button"
                               onClick={() => void onDelete(p)}
-                              className="p-1.5 rounded hover:bg-rose-50 text-rose-600"
-                              title="Eliminar"
+                              disabled={modoOffline}
+                              className="p-1.5 rounded hover:bg-rose-50 text-rose-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                              title={modoOffline ? 'Sin conexión' : 'Eliminar'}
                             >
                               <Trash2 size={16} />
                             </button>
@@ -866,7 +987,9 @@ export default function Productos() {
                     <button
                       type="button"
                       onClick={() => void verHistorial(p)}
-                      className="p-1.5 rounded text-slate-600 hover:bg-white"
+                      disabled={modoOffline}
+                      className="p-1.5 rounded text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={modoOffline ? 'Sin conexión' : 'Historial de costos'}
                     >
                       <History size={16} />
                     </button>
@@ -875,21 +998,27 @@ export default function Productos() {
                         <button
                           type="button"
                           onClick={() => openFuture(p)}
-                          className="p-1.5 rounded text-slate-600 hover:bg-white"
+                          disabled={modoOffline}
+                          className="p-1.5 rounded text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                          title={modoOffline ? 'Sin conexión' : 'Futuros pedidos'}
                         >
                           <ShoppingBag size={16} />
                         </button>
                         <button
                           type="button"
                           onClick={() => void openEdit(p)}
-                          className="p-1.5 rounded text-slate-600 hover:bg-white"
+                          disabled={modoOffline}
+                          className="p-1.5 rounded text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                          title={modoOffline ? 'Sin conexión' : 'Editar'}
                         >
                           <Pencil size={16} />
                         </button>
                         <button
                           type="button"
                           onClick={() => void onDelete(p)}
-                          className="p-1.5 rounded text-rose-600 hover:bg-rose-50"
+                          disabled={modoOffline}
+                          className="p-1.5 rounded text-rose-600 hover:bg-rose-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                          title={modoOffline ? 'Sin conexión' : 'Eliminar'}
                         >
                           <Trash2 size={16} />
                         </button>
