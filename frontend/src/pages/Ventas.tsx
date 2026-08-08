@@ -367,33 +367,40 @@ export default function Ventas() {
               </button>
             </div>
             <div className="p-4 sm:p-5">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-slate-500">
-                    <tr>
-                      <th className="pb-2">Producto</th>
-                      <th className="pb-2">Cant.</th>
-                      <th className="pb-2">Precio</th>
-                      <th className="pb-2 text-right">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(detalle.detalles || []).map((d) => (
-                      <tr key={d.id} className="border-t border-slate-100">
-                        <td className="py-2 pr-2">
-                          {d.producto_nombre ||
-                            d.descripcion ||
-                            (d.producto_id ? `Producto #${d.producto_id}` : 'Importe directo')}
-                        </td>
-                        <td className="py-2">{d.cantidad}</td>
-                        <td className="py-2">{money(Number(d.precio_unitario))}</td>
-                        <td className="py-2 text-right font-medium">
+              <div className="space-y-3">
+                {(detalle.detalles || []).map((d) => (
+                  <div
+                    key={d.id}
+                    className="rounded-lg border border-slate-200 bg-slate-50/80 p-3"
+                  >
+                    <p className="text-sm font-medium text-brand-black break-words">
+                      {d.producto_nombre ||
+                        d.descripcion ||
+                        (d.producto_id ? `Producto #${d.producto_id}` : 'Importe directo')}
+                    </p>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-600">
+                      <div>
+                        <span className="block text-slate-400">Cant.</span>
+                        <span className="font-medium text-slate-800">{d.cantidad}</span>
+                      </div>
+                      <div>
+                        <span className="block text-slate-400">P. unit.</span>
+                        <span className="font-medium text-slate-800">
+                          {money(Number(d.precio_unitario))}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="block text-slate-400">Subtotal</span>
+                        <span className="font-semibold text-brand-black">
                           {money(Number(d.subtotal))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {(detalle.detalles || []).length === 0 && (
+                  <p className="text-sm text-slate-400 text-center py-4">Sin productos</p>
+                )}
               </div>
               <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap justify-between items-center gap-2">
                 <span className="text-sm text-slate-500">{labelPago(detalle)}</span>
