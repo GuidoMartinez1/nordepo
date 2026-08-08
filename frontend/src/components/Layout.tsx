@@ -202,8 +202,8 @@ export default function Layout({ children }: { children?: ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 md:p-8">
-          <div className="max-w-[1920px] w-full mx-auto overflow-x-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8">
+          <div className="max-w-[1920px] w-full mx-auto">
             {children ?? <Outlet />}
           </div>
         </main>

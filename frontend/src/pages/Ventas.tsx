@@ -80,6 +80,9 @@ export default function Ventas() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [fechaDesde, setFechaDesde] = useState('')
   const [fechaHasta, setFechaHasta] = useState('')
+  // Solo una vista montada (tabla O tarjetas): montar ambas en móvil dejaba pantalla en blanco
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches)
+  const [visibleCount, setVisibleCount] = useState(40)
 
   async function load() {
     const params = sucursalId ? { sucursal_id: sucursalId } : {}
@@ -91,6 +94,18 @@ export default function Ventas() {
     void load().catch(() => toast.error('Error al cargar ventas'))
   }, [sucursalId])
 
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const sync = () => setIsMobile(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+
+  useEffect(() => {
+    setVisibleCount(40)
+  }, [fechaDesde, fechaHasta, items])
+
   const filtradas = useMemo(() => {
     return items.filter((venta) => {
       if (!venta.fecha) return false
@@ -100,6 +115,9 @@ export default function Ventas() {
       return true
     })
   }, [items, fechaDesde, fechaHasta])
+
+  const visibles = filtradas.slice(0, visibleCount)
+  const hayMas = visibleCount < filtradas.length
 
   async function verDetalle(id: number) {
     try {
@@ -154,26 +172,28 @@ export default function Ventas() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
-        <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Desde</label>
-          <input
-            type="date"
-            value={fechaDesde}
-            onChange={(e) => setFechaDesde(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
-          />
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3 md:space-y-0 md:grid md:grid-cols-5 md:gap-3 md:items-end">
+        <div className="flex gap-3 w-full md:contents">
+          <div className="min-w-0 flex-1 w-full">
+            <label className="block text-xs font-medium text-slate-500 mb-1">Desde</label>
+            <input
+              type="date"
+              value={fechaDesde}
+              onChange={(e) => setFechaDesde(e.target.value)}
+              className="block w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white [-webkit-appearance:none] appearance-none"
+            />
+          </div>
+          <div className="min-w-0 flex-1 w-full">
+            <label className="block text-xs font-medium text-slate-500 mb-1">Hasta</label>
+            <input
+              type="date"
+              value={fechaHasta}
+              onChange={(e) => setFechaHasta(e.target.value)}
+              className="block w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white [-webkit-appearance:none] appearance-none"
+            />
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Hasta</label>
-          <input
-            type="date"
-            value={fechaHasta}
-            onChange={(e) => setFechaHasta(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
-          />
-        </div>
-        <div className="col-span-2 md:col-span-3 flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center w-full md:col-span-3">
           <button
             type="button"
             onClick={() => {
@@ -203,107 +223,127 @@ export default function Ventas() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-6">
-        {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
-              <tr>
-                <th className="px-4 py-2">#</th>
-                <th className="px-4 py-2">Fecha</th>
-                {esTodas && <th className="px-4 py-2">Sucursal</th>}
-                <th className="px-4 py-2">Vendedor</th>
-                <th className="px-4 py-2">Pago</th>
-                <th className="px-4 py-2">Total</th>
-                <th className="px-4 py-2 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtradas.map((v) => (
-                <tr key={v.id} className="border-t border-slate-100">
-                  <td className="px-4 py-2">{v.id}</td>
-                  <td className="px-4 py-2">{new Date(v.fecha).toLocaleString('es-AR')}</td>
-                  {esTodas && (
-                    <td className="px-4 py-2 text-slate-600">{v.sucursal_nombre || '—'}</td>
-                  )}
-                  <td className="px-4 py-2">{v.usuario_nombre || '—'}</td>
-                  <td className="px-4 py-2">{labelPago(v)}</td>
-                  <td className="px-4 py-2 font-semibold">{money(Number(v.total))}</td>
-                  <td className="px-4 py-2">
-                    <div className="flex justify-end">
-                      <AccionesVenta
-                        v={v}
-                        isAdmin={isAdmin}
-                        deletingId={deletingId}
-                        onVer={() => void verDetalle(v.id)}
-                        onEliminar={() => void eliminar(v)}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtradas.length === 0 && (
-                <tr>
-                  <td colSpan={esTodas ? 7 : 6} className="px-4 py-8 text-center text-slate-400">
-                    {items.length === 0 ? 'Sin ventas todavía' : 'Sin ventas en ese período'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile cards */}
-        <div className="md:hidden space-y-3">
-          {filtradas.map((v) => (
-            <div
-              key={v.id}
-              className="border border-slate-200 rounded-lg p-4 shadow-sm bg-slate-50/50"
-            >
-              <div className="flex justify-between items-start gap-2 mb-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <ShoppingCart className="h-5 w-5 text-brand-black shrink-0" />
-                  <h3 className="font-bold text-brand-black">Venta #{v.id}</h3>
-                </div>
-                <AccionesVenta
-                  v={v}
-                  isAdmin={isAdmin}
-                  deletingId={deletingId}
-                  onVer={() => void verDetalle(v.id)}
-                  onEliminar={() => void eliminar(v)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm border-t border-slate-200 pt-2">
-                <div>
-                  <span className="text-xs text-slate-500 block">Fecha</span>
-                  <span>{new Date(v.fecha).toLocaleDateString('es-AR')}</span>
-                </div>
-                {esTodas && (
-                  <div>
-                    <span className="text-xs text-slate-500 block">Sucursal</span>
-                    <span>{v.sucursal_nombre || '—'}</span>
+        {isMobile ? (
+          <div className="space-y-3">
+            {visibles.map((v) => (
+              <div
+                key={v.id}
+                className="border border-slate-200 rounded-lg p-4 shadow-sm bg-slate-50/50"
+              >
+                <div className="flex justify-between items-start gap-2 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ShoppingCart className="h-5 w-5 text-brand-black shrink-0" />
+                    <h3 className="font-bold text-brand-black">Venta #{v.id}</h3>
                   </div>
-                )}
-                <div>
-                  <span className="text-xs text-slate-500 block">Vendedor</span>
-                  <span className="truncate block">{v.usuario_nombre || '—'}</span>
+                  <AccionesVenta
+                    v={v}
+                    isAdmin={isAdmin}
+                    deletingId={deletingId}
+                    onVer={() => void verDetalle(v.id)}
+                    onEliminar={() => void eliminar(v)}
+                  />
                 </div>
-                <div>
-                  <span className="text-xs text-slate-500 block">Pago</span>
-                  <span>{labelPago(v)}</span>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-xs text-slate-500 block">Total</span>
-                  <span className="text-lg font-bold">{money(Number(v.total))}</span>
+                <div className="grid grid-cols-2 gap-2 text-sm border-t border-slate-200 pt-2">
+                  <div>
+                    <span className="text-xs text-slate-500 block">Fecha</span>
+                    <span>{new Date(v.fecha).toLocaleDateString('es-AR')}</span>
+                  </div>
+                  {esTodas && (
+                    <div>
+                      <span className="text-xs text-slate-500 block">Sucursal</span>
+                      <span>{v.sucursal_nombre || '—'}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-xs text-slate-500 block">Vendedor</span>
+                    <span className="truncate block">{v.usuario_nombre || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-500 block">Pago</span>
+                    <span>{labelPago(v)}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-xs text-slate-500 block">Total</span>
+                    <span className="text-lg font-bold">{money(Number(v.total))}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-          {filtradas.length === 0 && (
-            <p className="text-center py-8 text-slate-400 text-sm">
-              {items.length === 0 ? 'Sin ventas todavía' : 'Sin ventas en ese período'}
-            </p>
-          )}
-        </div>
+            ))}
+            {filtradas.length === 0 && (
+              <p className="text-center py-8 text-slate-400 text-sm">
+                {items.length === 0 ? 'Sin ventas todavía' : 'Sin ventas en ese período'}
+              </p>
+            )}
+            {hayMas && (
+              <button
+                type="button"
+                onClick={() => setVisibleCount((n) => n + 40)}
+                className="w-full py-3 text-sm font-semibold text-brand-black bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100"
+              >
+                Mostrar más ({filtradas.length - visibleCount} restantes)
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-slate-500">
+                <tr>
+                  <th className="px-4 py-2">#</th>
+                  <th className="px-4 py-2">Fecha</th>
+                  {esTodas && <th className="px-4 py-2">Sucursal</th>}
+                  <th className="px-4 py-2">Vendedor</th>
+                  <th className="px-4 py-2">Pago</th>
+                  <th className="px-4 py-2">Total</th>
+                  <th className="px-4 py-2 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibles.map((v) => (
+                  <tr key={v.id} className="border-t border-slate-100">
+                    <td className="px-4 py-2">{v.id}</td>
+                    <td className="px-4 py-2">{new Date(v.fecha).toLocaleString('es-AR')}</td>
+                    {esTodas && (
+                      <td className="px-4 py-2 text-slate-600">{v.sucursal_nombre || '—'}</td>
+                    )}
+                    <td className="px-4 py-2">{v.usuario_nombre || '—'}</td>
+                    <td className="px-4 py-2">{labelPago(v)}</td>
+                    <td className="px-4 py-2 font-semibold">{money(Number(v.total))}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex justify-end">
+                        <AccionesVenta
+                          v={v}
+                          isAdmin={isAdmin}
+                          deletingId={deletingId}
+                          onVer={() => void verDetalle(v.id)}
+                          onEliminar={() => void eliminar(v)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filtradas.length === 0 && (
+                  <tr>
+                    <td colSpan={esTodas ? 7 : 6} className="px-4 py-8 text-center text-slate-400">
+                      {items.length === 0 ? 'Sin ventas todavía' : 'Sin ventas en ese período'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            {hayMas && (
+              <div className="pt-4 border-t border-slate-100 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((n) => n + 40)}
+                  className="w-full py-2 text-sm font-semibold text-brand-black bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100"
+                >
+                  Mostrar más ({filtradas.length - visibleCount} restantes)
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {detalle && (
