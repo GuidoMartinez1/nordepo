@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   Plus,
+  CircleDollarSign,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSucursal } from '../contexts/SucursalContext'
@@ -41,6 +42,7 @@ const links: NavItem[] = [
   { to: '/proveedores', label: 'Proveedores', icon: Factory, roles: ['admin'] },
   { to: '/gastos', label: 'Gastos', icon: Receipt, roles: ['admin', 'vendedor'] },
   { to: '/reportes', label: 'Reportes', icon: BarChart3, roles: ['admin'] },
+  { to: '/ganancias', label: 'Ganancias', icon: CircleDollarSign, roles: ['admin'] },
   { to: '/cuentas-mp', label: 'Cuentas MP', icon: Wallet, roles: ['admin'] },
   { to: '/usuarios', label: 'Usuarios', icon: UserCog, roles: ['admin'] },
   { to: '/actualizaciones', label: 'Actualizaciones', icon: TrendingUp, roles: ['admin'] },

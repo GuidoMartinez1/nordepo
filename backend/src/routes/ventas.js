@@ -178,10 +178,21 @@ router.post('/', async (req, res) => {
     const venta = ventaRows[0]
 
     for (const linea of lineas) {
+      let precioCostoUnitario = null
+      if (linea.producto_id) {
+        const costoResult = await client.query(
+          `SELECT precio_costo FROM productos WHERE id = $1`,
+          [linea.producto_id]
+        )
+        if (costoResult.rows.length > 0 && costoResult.rows[0].precio_costo != null) {
+          precioCostoUnitario = costoResult.rows[0].precio_costo
+        }
+      }
+
       await client.query(
         `INSERT INTO detalles_venta
-           (venta_id, producto_id, cantidad, precio_unitario, subtotal, descripcion)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+           (venta_id, producto_id, cantidad, precio_unitario, subtotal, descripcion, precio_costo_unitario)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           venta.id,
           linea.producto_id,
@@ -189,6 +200,7 @@ router.post('/', async (req, res) => {
           linea.precio_unitario,
           linea.subtotal,
           linea.descripcion,
+          precioCostoUnitario,
         ]
       )
 

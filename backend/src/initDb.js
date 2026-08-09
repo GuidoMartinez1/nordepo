@@ -184,6 +184,10 @@ export async function initDatabase() {
       ALTER TABLE detalles_venta
       ADD COLUMN IF NOT EXISTS descripcion VARCHAR(255)
     `)
+    await client.query(`
+      ALTER TABLE detalles_venta
+      ADD COLUMN IF NOT EXISTS precio_costo_unitario DECIMAL(12,2)
+    `)
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS compras (

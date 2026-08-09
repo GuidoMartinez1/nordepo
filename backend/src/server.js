@@ -21,6 +21,7 @@ import futurosPedidosRoutes from './routes/futurosPedidos.js'
 import gastosRoutes from './routes/gastos.js'
 import cotizacionesRoutes from './routes/cotizaciones.js'
 import reportesRoutes from './routes/reportes.js'
+import gananciasRoutes from './routes/ganancias.js'
 import empleadosRoutes from './routes/empleados.js'
 import { requireRole } from './middleware/requireAuth.js'
 
@@ -78,6 +79,7 @@ app.use('/api/actualizaciones-precios', actualizacionesRoutes)
 app.use('/api/gastos', gastosRoutes)
 app.use('/api/cotizaciones', requireRole('admin'), cotizacionesRoutes)
 app.use('/api/reportes', requireRole('admin'), reportesRoutes)
+app.use('/api/ganancias', requireRole('admin'), gananciasRoutes)
 
 app.use((err, _req, res, _next) => {
   console.error('Unhandled error:', err)

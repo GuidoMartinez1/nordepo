@@ -19,6 +19,7 @@ import Actualizaciones from './pages/Actualizaciones'
 import CuentasMp from './pages/CuentasMp'
 import Gastos from './pages/Gastos'
 import Reportes from './pages/Reportes'
+import Ganancias from './pages/Ganancias'
 import Usuarios from './pages/Usuarios'
 
 export default function App() {
@@ -72,6 +73,14 @@ export default function App() {
                         element={
                           <RoleRoute roles={['admin']}>
                             <Reportes />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/ganancias"
+                        element={
+                          <RoleRoute roles={['admin']}>
+                            <Ganancias />
                           </RoleRoute>
                         }
                       />
