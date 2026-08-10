@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
 
     const diarios = await pool.query(
       `SELECT
-         v.fecha::date AS fecha,
+         to_char(v.fecha::date, 'YYYY-MM-DD') AS fecha,
          COUNT(DISTINCT v.id)::int AS cantidad_ventas,
          COALESCE(SUM(dv.cantidad), 0)::int AS unidades,
          COALESCE(SUM(dv.subtotal), 0)::numeric AS total_venta,

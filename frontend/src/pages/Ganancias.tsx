@@ -32,7 +32,8 @@ type GananciaProducto = {
 
 const cardClass = 'bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-6'
 const inputFieldClass =
-  'w-full border border-slate-300 p-2 rounded-lg focus:ring-brand-lime focus:border-brand-lime transition text-sm bg-white'
+  'block w-full max-w-full min-w-0 box-border border border-slate-300 p-2.5 rounded-lg focus:ring-brand-lime focus:border-brand-lime transition text-sm bg-white'
+const dateInputClass = `${inputFieldClass} [-webkit-appearance:none] appearance-none`
 
 function getFirstDayOfMonth(): string {
   const now = new Date()
@@ -43,8 +44,11 @@ function getFirstDayOfMonth(): string {
 
 function formatDate(dateString: string) {
   if (!dateString) return '-'
-  const date = new Date(dateString.includes('T') ? dateString : dateString + 'T12:00:00')
-  return date.toLocaleDateString('es-AR')
+  // Evita el -1 día por timezone: usar solo YYYY-MM-DD
+  const day = String(dateString).slice(0, 10)
+  const [y, m, d] = day.split('-').map(Number)
+  if (!y || !m || !d) return '-'
+  return new Date(y, m - 1, d).toLocaleDateString('es-AR')
 }
 
 export default function Ganancias() {
@@ -93,7 +97,7 @@ export default function Ganancias() {
   }, [fechaDesde, fechaHasta, sucursalId])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="font-display text-2xl tracking-wide text-brand-black">Ganancias</h1>
         <p className="text-sm text-slate-500 mt-1">
@@ -102,31 +106,29 @@ export default function Ganancias() {
         </p>
       </div>
 
-      <div className={cardClass}>
-        <div className="flex flex-col sm:flex-row gap-4 items-end">
-          <div className="flex-1 w-full">
+      <div className={`${cardClass} overflow-hidden`}>
+        <h3 className="text-sm font-semibold text-brand-black mb-3 flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-slate-500 shrink-0" />
+          Filtro de fechas
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-full">
+          <div className="min-w-0 w-full overflow-hidden">
             <label className="block text-xs font-medium text-slate-600 mb-1">Desde</label>
-            <div className="relative">
-              <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                type="date"
-                value={fechaDesde}
-                onChange={(e) => setFechaDesde(e.target.value)}
-                className={`${inputFieldClass} pl-9`}
-              />
-            </div>
+            <input
+              type="date"
+              value={fechaDesde}
+              onChange={(e) => setFechaDesde(e.target.value)}
+              className={dateInputClass}
+            />
           </div>
-          <div className="flex-1 w-full">
+          <div className="min-w-0 w-full overflow-hidden">
             <label className="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
-            <div className="relative">
-              <Calendar className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                type="date"
-                value={fechaHasta}
-                onChange={(e) => setFechaHasta(e.target.value)}
-                className={`${inputFieldClass} pl-9`}
-              />
-            </div>
+            <input
+              type="date"
+              value={fechaHasta}
+              onChange={(e) => setFechaHasta(e.target.value)}
+              className={dateInputClass}
+            />
           </div>
         </div>
       </div>
@@ -135,46 +137,52 @@ export default function Ganancias() {
         <div className="text-center py-12 text-slate-500">Cargando...</div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <div className={cardClass}>
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-50 rounded-lg">
+                <div className="p-2 bg-blue-50 rounded-lg shrink-0">
                   <ShoppingCart className="h-5 w-5 text-blue-600" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-slate-500">Venta productos</p>
-                  <p className="text-lg font-bold text-brand-black">{money(totales?.total_venta)}</p>
+                  <p className="text-lg font-bold text-brand-black truncate">
+                    {money(totales?.total_venta)}
+                  </p>
                 </div>
               </div>
             </div>
             <div className={cardClass}>
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-50 rounded-lg">
+                <div className="p-2 bg-amber-50 rounded-lg shrink-0">
                   <Package className="h-5 w-5 text-amber-600" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-slate-500">Costo</p>
-                  <p className="text-lg font-bold text-brand-black">{money(totales?.total_costo)}</p>
+                  <p className="text-lg font-bold text-brand-black truncate">
+                    {money(totales?.total_costo)}
+                  </p>
                 </div>
               </div>
             </div>
             <div className={cardClass}>
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-50 rounded-lg">
+                <div className="p-2 bg-green-50 rounded-lg shrink-0">
                   <TrendingUp className="h-5 w-5 text-green-600" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-slate-500">Ganancia neta</p>
-                  <p className="text-lg font-bold text-green-700">{money(totales?.ganancia_neta)}</p>
+                  <p className="text-lg font-bold text-green-700 truncate">
+                    {money(totales?.ganancia_neta)}
+                  </p>
                 </div>
               </div>
             </div>
             <div className={cardClass}>
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-brand-lime/20 rounded-lg">
+                <div className="p-2 bg-brand-lime/20 rounded-lg shrink-0">
                   <DollarSign className="h-5 w-5 text-brand-black" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs text-slate-500">Unidades</p>
                   <p className="text-lg font-bold text-brand-black">{totales?.unidades ?? 0}</p>
                 </div>
@@ -189,34 +197,78 @@ export default function Ganancias() {
                 No hay ventas de productos con costo registrado en este período.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-500">
-                      <th className="py-2 pr-4 font-medium">Fecha</th>
-                      <th className="py-2 pr-4 font-medium text-right">Ventas</th>
-                      <th className="py-2 pr-4 font-medium text-right">Unidades</th>
-                      <th className="py-2 pr-4 font-medium text-right">Venta</th>
-                      <th className="py-2 pr-4 font-medium text-right">Costo</th>
-                      <th className="py-2 font-medium text-right">Ganancia</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {diarios.map((dia) => (
-                      <tr key={String(dia.fecha)} className="border-b border-slate-100">
-                        <td className="py-2.5 pr-4">{formatDate(String(dia.fecha))}</td>
-                        <td className="py-2.5 pr-4 text-right">{dia.cantidad_ventas}</td>
-                        <td className="py-2.5 pr-4 text-right">{dia.unidades}</td>
-                        <td className="py-2.5 pr-4 text-right">{money(dia.total_venta)}</td>
-                        <td className="py-2.5 pr-4 text-right">{money(dia.total_costo)}</td>
-                        <td className="py-2.5 text-right font-semibold text-green-700">
-                          {money(dia.ganancia_neta)}
-                        </td>
+              <>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-slate-500">
+                        <th className="py-2 pr-4 font-medium">Fecha</th>
+                        <th className="py-2 pr-4 font-medium text-right">Ventas</th>
+                        <th className="py-2 pr-4 font-medium text-right">Unidades</th>
+                        <th className="py-2 pr-4 font-medium text-right">Venta</th>
+                        <th className="py-2 pr-4 font-medium text-right">Costo</th>
+                        <th className="py-2 font-medium text-right">Ganancia</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {diarios.map((dia) => (
+                        <tr key={String(dia.fecha)} className="border-b border-slate-100">
+                          <td className="py-2.5 pr-4">{formatDate(String(dia.fecha))}</td>
+                          <td className="py-2.5 pr-4 text-right">{dia.cantidad_ventas}</td>
+                          <td className="py-2.5 pr-4 text-right">{dia.unidades}</td>
+                          <td className="py-2.5 pr-4 text-right">{money(dia.total_venta)}</td>
+                          <td className="py-2.5 pr-4 text-right">{money(dia.total_costo)}</td>
+                          <td className="py-2.5 text-right font-semibold text-green-700">
+                            {money(dia.ganancia_neta)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="md:hidden space-y-3">
+                  {diarios.map((dia) => (
+                    <div
+                      key={String(dia.fecha)}
+                      className="border border-slate-200 rounded-lg p-3.5 bg-slate-50/60"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <span className="font-semibold text-brand-black">
+                          {formatDate(String(dia.fecha))}
+                        </span>
+                        <span className="text-base font-bold text-green-700">
+                          {money(dia.ganancia_neta)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="rounded-md bg-white border border-slate-100 py-1.5 px-1">
+                          <p className="text-slate-500">Ventas</p>
+                          <p className="font-semibold text-brand-black">{dia.cantidad_ventas}</p>
+                        </div>
+                        <div className="rounded-md bg-white border border-slate-100 py-1.5 px-1">
+                          <p className="text-slate-500">Unid.</p>
+                          <p className="font-semibold text-brand-black">{dia.unidades}</p>
+                        </div>
+                        <div className="rounded-md bg-white border border-slate-100 py-1.5 px-1">
+                          <p className="text-slate-500">Venta</p>
+                          <p className="font-semibold text-brand-black">{money(dia.total_venta)}</p>
+                        </div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-center text-xs">
+                        <div className="rounded-md bg-white border border-slate-100 py-1.5 px-1">
+                          <p className="text-slate-500">Costo</p>
+                          <p className="font-semibold text-brand-black">{money(dia.total_costo)}</p>
+                        </div>
+                        <div className="rounded-md bg-white border border-slate-100 py-1.5 px-1">
+                          <p className="text-slate-500">Ganancia</p>
+                          <p className="font-semibold text-green-700">{money(dia.ganancia_neta)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
@@ -225,32 +277,66 @@ export default function Ganancias() {
             {detalle.length === 0 ? (
               <p className="text-sm text-slate-500 py-4 text-center">Sin detalle en este período.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-500">
-                      <th className="py-2 pr-4 font-medium">Producto</th>
-                      <th className="py-2 pr-4 font-medium text-right">Unidades</th>
-                      <th className="py-2 pr-4 font-medium text-right">Venta</th>
-                      <th className="py-2 pr-4 font-medium text-right">Costo</th>
-                      <th className="py-2 font-medium text-right">Ganancia</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detalle.map((p) => (
-                      <tr key={p.producto_id} className="border-b border-slate-100">
-                        <td className="py-2.5 pr-4">{p.producto_nombre}</td>
-                        <td className="py-2.5 pr-4 text-right">{p.unidades}</td>
-                        <td className="py-2.5 pr-4 text-right">{money(p.total_venta)}</td>
-                        <td className="py-2.5 pr-4 text-right">{money(p.total_costo)}</td>
-                        <td className="py-2.5 text-right font-semibold text-green-700">
-                          {money(p.ganancia_neta)}
-                        </td>
+              <>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-slate-500">
+                        <th className="py-2 pr-4 font-medium">Producto</th>
+                        <th className="py-2 pr-4 font-medium text-right">Unidades</th>
+                        <th className="py-2 pr-4 font-medium text-right">Venta</th>
+                        <th className="py-2 pr-4 font-medium text-right">Costo</th>
+                        <th className="py-2 font-medium text-right">Ganancia</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {detalle.map((p) => (
+                        <tr key={p.producto_id} className="border-b border-slate-100">
+                          <td className="py-2.5 pr-4">{p.producto_nombre}</td>
+                          <td className="py-2.5 pr-4 text-right">{p.unidades}</td>
+                          <td className="py-2.5 pr-4 text-right">{money(p.total_venta)}</td>
+                          <td className="py-2.5 pr-4 text-right">{money(p.total_costo)}</td>
+                          <td className="py-2.5 text-right font-semibold text-green-700">
+                            {money(p.ganancia_neta)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="md:hidden space-y-2.5">
+                  {detalle.map((p) => (
+                    <div
+                      key={p.producto_id}
+                      className="border border-slate-200 rounded-lg p-3.5 bg-slate-50/60"
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <p className="font-medium text-brand-black text-sm leading-snug">
+                          {p.producto_nombre}
+                        </p>
+                        <span className="shrink-0 text-sm font-bold text-green-700">
+                          {money(p.ganancia_neta)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="rounded-md bg-white border border-slate-100 py-1.5 px-1">
+                          <p className="text-slate-500">Unid.</p>
+                          <p className="font-semibold text-brand-black">{p.unidades}</p>
+                        </div>
+                        <div className="rounded-md bg-white border border-slate-100 py-1.5 px-1">
+                          <p className="text-slate-500">Venta</p>
+                          <p className="font-semibold text-brand-black">{money(p.total_venta)}</p>
+                        </div>
+                        <div className="rounded-md bg-white border border-slate-100 py-1.5 px-1">
+                          <p className="text-slate-500">Costo</p>
+                          <p className="font-semibold text-brand-black">{money(p.total_costo)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </>
