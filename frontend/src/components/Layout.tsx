@@ -132,7 +132,7 @@ export default function Layout({ children }: { children?: ReactNode }) {
           </div>
         </div>
 
-        <nav className="mt-3 flex-1 min-h-0 overflow-auto px-3 space-y-1 pb-3">
+        <nav className="mt-3 flex-1 min-h-0 overflow-auto px-3 space-y-1 pb-3 scrollbar-dark">
           {visibleLinks.map(({ to, label, icon: Icon, end }) => {
             const isActive = end
               ? location.pathname === to

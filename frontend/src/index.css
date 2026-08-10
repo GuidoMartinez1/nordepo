@@ -11,6 +11,8 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: #c4c4c4 transparent;
 }
 
 body {
@@ -19,6 +21,49 @@ body {
   background: #ececec;
   color: #0a0a0a;
   font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* Scrollbars sutiles (WebKit) */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #c4c4c4;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #a3a3a3;
+}
+
+/* Sidebar / fondos oscuros */
+.scrollbar-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(200, 255, 0, 0.35) transparent;
+}
+
+.scrollbar-dark::-webkit-scrollbar {
+  width: 5px;
+}
+
+.scrollbar-dark::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px 0;
+}
+
+.scrollbar-dark::-webkit-scrollbar-thumb {
+  background: rgba(200, 255, 0, 0.28);
+  border-radius: 999px;
+}
+
+.scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background: rgba(200, 255, 0, 0.5);
 }
 
 @layer components {

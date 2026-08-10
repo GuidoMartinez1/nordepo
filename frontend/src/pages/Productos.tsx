@@ -19,20 +19,21 @@ type Categoria = { id: number; nombre: string }
 type StockSucursal = {
   sucursal_id: number
   sucursal_nombre: string
-  cantidad: number
+  cantidad: string
   es_deposito?: boolean
 }
 type PrecioSucursal = {
   sucursal_id: number
   sucursal_nombre: string
-  precio: number
-  porcentaje_ganancia: number
+  precio: string
+  porcentaje_ganancia: string
 }
 
 type FormState = {
   nombre: string
   codigo: string
   precio_costo: string
+  porcentaje_ganancia: string
   categoria_id: string
 }
 
@@ -40,8 +41,38 @@ const emptyForm = (): FormState => ({
   nombre: '',
   codigo: '',
   precio_costo: '',
+  porcentaje_ganancia: '30',
   categoria_id: '',
 })
+
+/** Solo dígitos y un separador decimal; permite vacío mientras se escribe */
+function sanitizeDecimal(value: string) {
+  const normalized = value.replace(',', '.')
+  let out = ''
+  let dot = false
+  for (const ch of normalized) {
+    if (ch >= '0' && ch <= '9') out += ch
+    else if (ch === '.' && !dot) {
+      out += '.'
+      dot = true
+    }
+  }
+  return out
+}
+
+function sanitizeInt(value: string) {
+  return value.replace(/\D/g, '')
+}
+
+function parseNum(value: string) {
+  const n = parseFloat(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+function formatNum(value: number) {
+  if (!Number.isFinite(value)) return ''
+  return String(Number(value.toFixed(2)))
+}
 
 function calcularPrecioVenta(precioCosto: number, porcentajeGanancia: number) {
   return precioCosto * (1 + porcentajeGanancia / 100)
@@ -271,8 +302,8 @@ export default function Productos() {
     return sucursales.map((s) => ({
       sucursal_id: s.id,
       sucursal_nombre: s.nombre,
-      precio: 0,
-      porcentaje_ganancia: 30,
+      precio: '',
+      porcentaje_ganancia: '30',
     }))
   }
 
@@ -280,7 +311,7 @@ export default function Productos() {
     return todasSucursales.map((s) => ({
       sucursal_id: s.id,
       sucursal_nombre: s.nombre,
-      cantidad: 0,
+      cantidad: '',
       es_deposito: !!s.es_deposito,
     }))
   }
@@ -299,22 +330,51 @@ export default function Productos() {
     try {
       const { data } = await api.get<
         Producto & {
-          stock_por_sucursal: StockSucursal[]
-          precios_por_sucursal: PrecioSucursal[]
+          stock_por_sucursal: Array<{
+            sucursal_id: number
+            sucursal_nombre: string
+            cantidad: number
+            es_deposito?: boolean
+          }>
+          precios_por_sucursal: Array<{
+            sucursal_id: number
+            sucursal_nombre: string
+            precio: number
+            porcentaje_ganancia: number
+          }>
         }
       >(`/productos/${producto.id}`)
       setEditing(producto)
+      const pctInicial =
+        data.precios_por_sucursal?.[0]?.porcentaje_ganancia ??
+        data.porcentaje_ganancia ??
+        30
       setForm({
         nombre: data.nombre || '',
         codigo: data.codigo || '',
-        precio_costo: String(data.precio_costo ?? ''),
+        precio_costo: data.precio_costo != null ? String(data.precio_costo) : '',
+        porcentaje_ganancia: formatNum(Number(pctInicial)),
         categoria_id: data.categoria_id ? String(data.categoria_id) : '',
       })
       setStockPorSucursal(
-        data.stock_por_sucursal?.length ? data.stock_por_sucursal : emptyStock()
+        data.stock_por_sucursal?.length
+          ? data.stock_por_sucursal.map((s) => ({
+              sucursal_id: s.sucursal_id,
+              sucursal_nombre: s.sucursal_nombre,
+              cantidad: s.cantidad ? String(s.cantidad) : '',
+              es_deposito: !!s.es_deposito,
+            }))
+          : emptyStock()
       )
       setPreciosPorSucursal(
-        data.precios_por_sucursal?.length ? data.precios_por_sucursal : emptyPrecios()
+        data.precios_por_sucursal?.length
+          ? data.precios_por_sucursal.map((p) => ({
+              sucursal_id: p.sucursal_id,
+              sucursal_nombre: p.sucursal_nombre,
+              precio: p.precio ? formatNum(Number(p.precio)) : '',
+              porcentaje_ganancia: formatNum(Number(p.porcentaje_ganancia ?? 30)),
+            }))
+          : emptyPrecios()
       )
       setShowModal(true)
     } catch {
@@ -323,58 +383,63 @@ export default function Productos() {
   }
 
   function setStockSucursal(sucursal_id: number, cantidad: string) {
-    const n = Math.max(0, parseInt(cantidad || '0', 10) || 0)
+    const cleaned = sanitizeInt(cantidad)
     setStockPorSucursal((prev) =>
-      prev.map((s) => (s.sucursal_id === sucursal_id ? { ...s, cantidad: n } : s))
+      prev.map((s) => (s.sucursal_id === sucursal_id ? { ...s, cantidad: cleaned } : s))
     )
   }
 
-  function updatePrecioSucursal(
-    sucursal_id: number,
-    field: 'precio' | 'porcentaje_ganancia',
-    value: string
-  ) {
-    const costo = parseFloat(form.precio_costo) || 0
+  function updatePrecioSucursal(sucursal_id: number, value: string) {
+    const cleaned = sanitizeDecimal(value)
+    const costo = parseNum(form.precio_costo)
     setPreciosPorSucursal((prev) =>
       prev.map((row) => {
         if (row.sucursal_id !== sucursal_id) return row
-        if (field === 'porcentaje_ganancia') {
-          const pct = parseFloat(value)
-          const pctFinal = Number.isFinite(pct) ? pct : 30
-          const precio = costo > 0 ? calcularPrecioVenta(costo, pctFinal) : row.precio
-          return { ...row, porcentaje_ganancia: pctFinal, precio: Number(precio.toFixed(2)) }
+        if (cleaned === '' || cleaned === '.') {
+          return { ...row, precio: cleaned }
         }
-        const precio = parseFloat(value) || 0
-        const pct = costo > 0 ? calcularPorcentajeGanancia(costo, precio) : row.porcentaje_ganancia
-        return { ...row, precio, porcentaje_ganancia: Number(pct.toFixed(2)) }
+        const precio = parseNum(cleaned)
+        const pct = costo > 0 ? calcularPorcentajeGanancia(costo, precio) : parseNum(row.porcentaje_ganancia)
+        return {
+          ...row,
+          precio: cleaned,
+          porcentaje_ganancia: formatNum(pct),
+        }
       })
     )
   }
 
   function onCostoChange(value: string) {
-    setForm((prev) => ({ ...prev, precio_costo: value }))
-    const costo = parseFloat(value) || 0
-    if (costo <= 0) return
+    const cleaned = sanitizeDecimal(value)
+    setForm((prev) => ({ ...prev, precio_costo: cleaned }))
+    const costo = parseNum(cleaned)
+    const pct = parseNum(form.porcentaje_ganancia)
+    if (costo <= 0 || !Number.isFinite(pct)) return
     setPreciosPorSucursal((prev) =>
       prev.map((row) => ({
         ...row,
-        precio: Number(calcularPrecioVenta(costo, row.porcentaje_ganancia).toFixed(2)),
+        porcentaje_ganancia: formatNum(pct),
+        precio: formatNum(calcularPrecioVenta(costo, pct)),
       }))
     )
+  }
+
+  function onPctChange(value: string) {
+    const cleaned = sanitizeDecimal(value)
+    setForm((prev) => ({ ...prev, porcentaje_ganancia: cleaned }))
+    if (cleaned === '' || cleaned === '.') return
+    aplicarPctATodas(cleaned)
   }
 
   function aplicarPctATodas(pctStr: string) {
     const pct = parseFloat(pctStr)
     if (!Number.isFinite(pct)) return
-    const costo = parseFloat(form.precio_costo) || 0
+    const costo = parseNum(form.precio_costo)
     setPreciosPorSucursal((prev) =>
       prev.map((row) => ({
         ...row,
-        porcentaje_ganancia: pct,
-        precio:
-          costo > 0
-            ? Number(calcularPrecioVenta(costo, pct).toFixed(2))
-            : row.precio,
+        porcentaje_ganancia: formatNum(pct),
+        precio: costo > 0 ? formatNum(calcularPrecioVenta(costo, pct)) : row.precio,
       }))
     )
   }
@@ -397,21 +462,24 @@ export default function Productos() {
     setSaving(true)
     try {
       const first = preciosPorSucursal[0]
+      const pctGlobal = parseFloat(form.porcentaje_ganancia)
       const payload = {
         nombre: form.nombre.trim(),
         codigo: form.codigo.trim() || null,
-        precio_costo: Number(form.precio_costo) || 0,
-        precio: first?.precio ?? 0,
-        porcentaje_ganancia: first?.porcentaje_ganancia ?? 30,
+        precio_costo: parseNum(form.precio_costo),
+        precio: parseNum(first?.precio ?? ''),
+        porcentaje_ganancia: Number.isFinite(pctGlobal)
+          ? pctGlobal
+          : parseNum(first?.porcentaje_ganancia ?? '30'),
         categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
         stock_por_sucursal: stockPorSucursal.map((s) => ({
           sucursal_id: s.sucursal_id,
-          cantidad: s.cantidad,
+          cantidad: parseInt(s.cantidad || '0', 10) || 0,
         })),
         precios_por_sucursal: preciosPorSucursal.map((p) => ({
           sucursal_id: p.sucursal_id,
-          precio: p.precio,
-          porcentaje_ganancia: p.porcentaje_ganancia,
+          precio: parseNum(p.precio),
+          porcentaje_ganancia: parseNum(p.porcentaje_ganancia) || 30,
         })),
       }
 
@@ -1120,40 +1188,66 @@ export default function Productos() {
                 </label>
               </div>
 
-              <label className="block text-sm max-w-xs">
-                <span className="text-slate-600">Costo (igual en todas las sucursales)</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                  value={form.precio_costo}
-                  onChange={(e) => onCostoChange(e.target.value)}
-                />
-              </label>
+              <div className="rounded-xl border border-brand-lime/40 bg-brand-lime/10 p-4 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-brand-black">Costo y ganancia</p>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Precio de venta = costo + % de ganancia (se aplica a todas las sucursales)
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block text-sm">
+                    <span className="text-slate-700 font-medium">Costo</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 bg-white"
+                      value={form.precio_costo}
+                      onChange={(e) => onCostoChange(e.target.value)}
+                      placeholder="Ej: 1000"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="text-slate-700 font-medium">% de ganancia</span>
+                    <div className="mt-1 relative">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        className="w-full rounded-lg border-2 border-brand-black/20 px-3 py-2.5 pr-8 bg-white font-semibold text-brand-black focus:border-brand-lime focus:outline-none"
+                        value={form.porcentaje_ganancia}
+                        onChange={(e) => onPctChange(e.target.value)}
+                        placeholder="30"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">
+                        %
+                      </span>
+                    </div>
+                  </label>
+                </div>
+                {parseNum(form.precio_costo) > 0 && form.porcentaje_ganancia !== '' && (
+                  <p className="text-sm text-brand-black">
+                    Precio sugerido:{' '}
+                    <span className="font-bold">
+                      {money(
+                        calcularPrecioVenta(
+                          parseNum(form.precio_costo),
+                          parseNum(form.porcentaje_ganancia)
+                        )
+                      )}
+                    </span>
+                  </p>
+                )}
+              </div>
 
               <div>
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <p className="text-sm text-slate-600 font-medium">
-                    Precio de venta y % por sucursal
-                  </p>
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-brand-black underline"
-                    onClick={() => {
-                      const pct = prompt('Aplicar este % a todas las sucursales', '30')
-                      if (pct != null) aplicarPctATodas(pct)
-                    }}
-                  >
-                    Aplicar % a todas
-                  </button>
-                </div>
+                <p className="text-sm text-slate-600 font-medium mb-2">
+                  Precio de venta y stock por sucursal
+                </p>
                 <div className="rounded-lg border border-slate-200 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 text-left text-slate-500">
                       <tr>
                         <th className="px-3 py-2">Sucursal</th>
-                        <th className="px-3 py-2">%</th>
                         <th className="px-3 py-2">Precio venta</th>
                         <th className="px-3 py-2">Stock</th>
                       </tr>
@@ -1163,17 +1257,18 @@ export default function Productos() {
                         .filter((s) => s.es_deposito)
                         .map((s) => (
                           <tr key={s.sucursal_id} className="border-t border-slate-100 bg-slate-50/80">
-                            <td className="px-3 py-2 font-medium" colSpan={3}>
+                            <td className="px-3 py-2 font-medium" colSpan={2}>
                               {s.sucursal_nombre}
                               <span className="text-xs text-slate-400"> · sin precio de venta</span>
                             </td>
                             <td className="px-3 py-2">
                               <input
-                                type="number"
-                                min="0"
+                                type="text"
+                                inputMode="numeric"
                                 className="w-20 rounded border border-slate-300 px-2 py-1"
                                 value={s.cantidad}
                                 onChange={(e) => setStockSucursal(s.sucursal_id, e.target.value)}
+                                placeholder="0"
                               />
                             </td>
                           </tr>
@@ -1181,7 +1276,7 @@ export default function Productos() {
                       {preciosPorSucursal.map((p) => {
                         const stock =
                           stockPorSucursal.find((s) => s.sucursal_id === p.sucursal_id)
-                            ?.cantidad ?? 0
+                            ?.cantidad ?? ''
                         return (
                           <tr key={p.sucursal_id} className="border-t border-slate-100">
                             <td className="px-3 py-2 font-medium">
@@ -1192,39 +1287,26 @@ export default function Productos() {
                             </td>
                             <td className="px-3 py-2">
                               <input
-                                type="number"
-                                step="0.01"
-                                className="w-20 rounded border border-slate-300 px-2 py-1"
-                                value={p.porcentaje_ganancia}
-                                onChange={(e) =>
-                                  updatePrecioSucursal(
-                                    p.sucursal_id,
-                                    'porcentaje_ganancia',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 className="w-28 rounded border border-slate-300 px-2 py-1"
                                 value={p.precio}
                                 onChange={(e) =>
-                                  updatePrecioSucursal(p.sucursal_id, 'precio', e.target.value)
+                                  updatePrecioSucursal(p.sucursal_id, e.target.value)
                                 }
+                                placeholder="0"
                               />
                             </td>
                             <td className="px-3 py-2">
                               <input
-                                type="number"
-                                min="0"
+                                type="text"
+                                inputMode="numeric"
                                 className="w-20 rounded border border-slate-300 px-2 py-1"
                                 value={stock}
                                 onChange={(e) =>
                                   setStockSucursal(p.sucursal_id, e.target.value)
                                 }
+                                placeholder="0"
                               />
                             </td>
                           </tr>
@@ -1234,7 +1316,8 @@ export default function Productos() {
                   </table>
                 </div>
                 <p className="text-xs text-slate-500 mt-2">
-                  Las compras van al depósito; usá Traslados para mandar stock a sucursales.
+                  Si cambiás el precio de una sucursal a mano, el % de esa sucursal se ajusta solo.
+                  Las compras van al depósito; usá Traslados para mandar stock.
                 </p>
               </div>
 
