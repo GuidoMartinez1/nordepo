@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { Pencil, Plus, Trash2, X } from 'lucide-react'
 import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
+import PasswordInput from '../components/PasswordInput'
 
 type Usuario = {
   id: number
@@ -265,15 +266,24 @@ export default function Usuarios() {
               required
               autoComplete="off"
             />
-            <input
+            <PasswordInput
               className="w-full rounded-lg border border-slate-300 px-3 py-2"
-              placeholder={editing ? 'Nueva contraseña (opcional)' : 'Contraseña'}
-              type="password"
+              placeholder={
+                editing
+                  ? 'Nueva contraseña (opcional — restablecer acceso)'
+                  : 'Contraseña'
+              }
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required={!editing}
               autoComplete="new-password"
             />
+            {editing && (
+              <p className="text-xs text-slate-500 -mt-2">
+                Si el usuario olvidó la clave, cargá una temporal acá y pasásela. No se puede ver la
+                anterior.
+              </p>
+            )}
             <select
               className="w-full rounded-lg border border-slate-300 px-3 py-2"
               value={form.role}

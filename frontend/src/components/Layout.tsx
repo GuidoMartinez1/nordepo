@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSucursal } from '../contexts/SucursalContext'
+import ChangePasswordModal, { ChangePasswordButton } from './ChangePasswordModal'
 import type { ReactNode } from 'react'
 import type { UserRole } from '../contexts/AuthContext'
 
@@ -54,6 +55,7 @@ export default function Layout({ children }: { children?: ReactNode }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
   const role = user?.role ?? 'admin'
   const visibleLinks = links.filter((l) => l.roles.includes(role))
   const enNuevaVenta = location.pathname.startsWith('/ventas/nueva')
@@ -193,6 +195,9 @@ export default function Layout({ children }: { children?: ReactNode }) {
                 {role === 'admin' ? 'Administrador' : 'Vendedor'}
               </p>
             </div>
+            {role === 'admin' && (
+              <ChangePasswordButton onClick={() => setShowChangePassword(true)} />
+            )}
             <button
               type="button"
               onClick={logout}
@@ -221,6 +226,11 @@ export default function Layout({ children }: { children?: ReactNode }) {
           Nueva Venta
         </button>
       )}
+
+      <ChangePasswordModal
+        open={showChangePassword && role === 'admin'}
+        onClose={() => setShowChangePassword(false)}
+      />
     </div>
   )
 }

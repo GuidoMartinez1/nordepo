@@ -115,4 +115,94 @@ router.post('/logout', requireAuth, (_req, res) => {
   res.json({ ok: true })
 })
 
+/** Usuario logueado cambia su propia contraseña (solo admin) */
+router.post('/change-password', requireAuth, async (req, res) => {
+  if (req.user?.role === 'vendedor') {
+    return res.status(403).json({
+      error: 'Los vendedores no pueden cambiar la contraseña. Pedile al administrador.',
+    })
+  }
+
+  const currentPassword = req.body?.current_password || ''
+  const newPassword = req.body?.new_password || ''
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Completá la contraseña actual y la nueva' })
+  }
+  if (newPassword.length < 4) {
+    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 4 caracteres' })
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, password_hash FROM users WHERE id = $1 AND COALESCE(activo, TRUE) = TRUE`,
+      [req.user.id]
+    )
+    if (!rows.length) {
+      return res.status(401).json({ error: 'Sesión inválida' })
+    }
+
+    const ok = await bcrypt.compare(currentPassword, rows[0].password_hash)
+    if (!ok) {
+      return res.status(401).json({ error: 'La contraseña actual es incorrecta' })
+    }
+
+    const hash = await bcrypt.hash(newPassword, 12)
+    await pool.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [hash, req.user.id])
+    res.json({ ok: true, message: 'Contraseña actualizada' })
+  } catch (err) {
+    console.error('Error al cambiar contraseña:', err)
+    res.status(500).json({ error: 'Error al cambiar la contraseña' })
+  }
+})
+
+/**
+ * Recuperación sin email: usuario + código maestro (PASSWORD_RESET_CODE en env) + nueva clave.
+ * Solo para cuentas admin (los vendedores se resetean desde Usuarios).
+ */
+router.post('/reset-with-code', async (req, res) => {
+  const username = (req.body?.username || '').trim()
+  const resetCode = req.body?.reset_code || ''
+  const newPassword = req.body?.new_password || ''
+  const configuredCode = process.env.PASSWORD_RESET_CODE || ''
+
+  if (!configuredCode) {
+    return res.status(503).json({
+      error: 'La recuperación por código no está configurada. Pedile al administrador una nueva clave.',
+    })
+  }
+  if (!username || !resetCode || !newPassword) {
+    return res.status(400).json({ error: 'Completá usuario, código de recuperación y nueva contraseña' })
+  }
+  if (newPassword.length < 4) {
+    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 4 caracteres' })
+  }
+  if (resetCode !== configuredCode) {
+    return res.status(401).json({ error: 'Código de recuperación incorrecto' })
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, role FROM users WHERE username = $1 AND COALESCE(activo, TRUE) = TRUE
+       ORDER BY id DESC LIMIT 1`,
+      [username]
+    )
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Usuario no encontrado o inactivo' })
+    }
+    if (rows[0].role === 'vendedor') {
+      return res.status(403).json({
+        error: 'Los vendedores no pueden restablecer la clave. Pedile al administrador.',
+      })
+    }
+
+    const hash = await bcrypt.hash(newPassword, 12)
+    await pool.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [hash, rows[0].id])
+    res.json({ ok: true, message: 'Contraseña restablecida. Ya podés ingresar.' })
+  } catch (err) {
+    console.error('Error al restablecer contraseña:', err)
+    res.status(500).json({ error: 'Error al restablecer la contraseña' })
+  }
+})
+
 export default router
