@@ -40,11 +40,12 @@ router.get('/', async (_req, res) => {
              ) AS precios_por_sucursal,
              c.fecha AS fecha_detectado,
              c.sucursal_id,
-             'Depósito' AS sucursal_nombre,
+             s.nombre AS sucursal_nombre,
              pr.nombre AS proveedor_nombre
       FROM historial_costos h
       JOIN productos p ON h.producto_id = p.id
       JOIN compras c ON h.compra_id = c.id
+      LEFT JOIN sucursales s ON s.id = c.sucursal_id
       LEFT JOIN proveedores pr ON c.proveedor_id = pr.id
       WHERE h.revisado = FALSE
         AND h.precio_costo_nuevo <> h.precio_costo_anterior

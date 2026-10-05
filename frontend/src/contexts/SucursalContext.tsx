@@ -14,11 +14,8 @@ import { useAuth } from './AuthContext'
 const TODAS_VALUE = 'all'
 
 type SucursalContextValue = {
-  /** Solo sucursales de venta (sin depósito) — para el selector del header */
+  /** Sucursales de venta activas */
   sucursales: Sucursal[]
-  /** Incluye el depósito */
-  todasSucursales: Sucursal[]
-  deposito: Sucursal | null
   /** null = Todas las sucursales de venta (solo admin) */
   sucursalId: number | null
   sucursal: Sucursal | null
@@ -41,29 +38,18 @@ function readStoredSucursalId(): number | null {
 
 export function SucursalProvider({ children }: { children: ReactNode }) {
   const { token, user, isAdmin } = useAuth()
-  const [todasSucursales, setTodasSucursales] = useState<Sucursal[]>([])
+  const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [sucursalId, setSucursalIdState] = useState<number | null>(() => readStoredSucursalId())
   const [loading, setLoading] = useState(false)
 
   const sucursalFija = !isAdmin && !!user?.sucursal_id
 
-  const sucursales = useMemo(
-    () => todasSucursales.filter((s) => !s.es_deposito),
-    [todasSucursales]
-  )
-
-  const deposito = useMemo(
-    () => todasSucursales.find((s) => s.es_deposito) ?? null,
-    [todasSucursales]
-  )
-
   const refresh = useCallback(async () => {
     if (!token) return
     setLoading(true)
     try {
-      const { data } = await api.get<Sucursal[]>('/sucursales')
-      const activas = data.filter((s) => s.activa)
-      setTodasSucursales(activas)
+      const { data } = await api.get<Sucursal[]>('/sucursales', { params: { venta: 1 } })
+      setSucursales(data.filter((s) => s.activa && !s.es_deposito))
     } finally {
       setLoading(false)
     }
@@ -72,7 +58,7 @@ export function SucursalProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (token) void refresh()
     else {
-      setTodasSucursales([])
+      setSucursales([])
       setSucursalIdState(null)
     }
   }, [token, refresh])
@@ -107,20 +93,14 @@ export function SucursalProvider({ children }: { children: ReactNode }) {
 
   const sucursal = useMemo(() => {
     if (sucursalId == null) return null
-    return (
-      sucursales.find((s) => s.id === sucursalId) ??
-      todasSucursales.find((s) => s.id === sucursalId) ??
-      null
-    )
-  }, [sucursales, todasSucursales, sucursalId])
+    return sucursales.find((s) => s.id === sucursalId) ?? null
+  }, [sucursales, sucursalId])
 
   const esTodas = isAdmin && sucursalId === null
 
   const value = useMemo(
     () => ({
       sucursales,
-      todasSucursales,
-      deposito,
       sucursalId,
       sucursal,
       esTodas,
@@ -129,18 +109,7 @@ export function SucursalProvider({ children }: { children: ReactNode }) {
       loading,
       refresh,
     }),
-    [
-      sucursales,
-      todasSucursales,
-      deposito,
-      sucursalId,
-      sucursal,
-      esTodas,
-      sucursalFija,
-      setSucursalId,
-      loading,
-      refresh,
-    ]
+    [sucursales, sucursalId, sucursal, esTodas, sucursalFija, setSucursalId, loading, refresh]
   )
 
   return <SucursalContext.Provider value={value}>{children}</SucursalContext.Provider>

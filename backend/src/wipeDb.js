@@ -107,7 +107,7 @@ O para borrar también usuarios y sucursales:
     console.log('Listo: datos borrados.')
     if (todo) {
       console.log('Después corré: npm run init-db --prefix backend')
-      console.log('(recrea Depósito/Galería/Oulet y el admin del .env si no hay users)')
+      console.log('(recrea Galería/Oulet y el admin del .env si no hay users)')
     } else {
       console.log('Usuarios y sucursales se mantuvieron.')
     }

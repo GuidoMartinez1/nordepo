@@ -79,7 +79,7 @@ async function ejecutarTraslado(client, {
  * body:
  *  - single: { producto_id, sucursal_origen_id, sucursal_destino_id, cantidad, notas? }
  *  - cart:   { sucursal_origen_id, sucursal_destino_id, items: [{ producto_id, cantidad }], notas? }
- * Origen/destino: depósito o cualquier sucursal (distintos).
+ * Origen/destino: solo sucursales de venta (distintas).
  */
 router.post('/', async (req, res) => {
   const {
@@ -124,11 +124,17 @@ router.post('/', async (req, res) => {
     await client.query('BEGIN')
 
     const locs = await client.query(
-      `SELECT id FROM sucursales WHERE id = ANY($1::int[]) AND activa = TRUE`,
+      `SELECT id FROM sucursales
+       WHERE id = ANY($1::int[])
+         AND activa = TRUE
+         AND COALESCE(es_deposito, FALSE) = FALSE`,
       [[origenId, destinoId]]
     )
     if (locs.rows.length < 2) {
-      throw Object.assign(new Error('Origen o destino inválido'), { status: 400 })
+      throw Object.assign(
+        new Error('Origen y destino deben ser sucursales de venta activas'),
+        { status: 400 }
+      )
     }
 
     const creados = []

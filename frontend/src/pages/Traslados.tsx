@@ -23,7 +23,7 @@ type CartItem = {
 }
 
 export default function Traslados() {
-  const { todasSucursales, deposito, sucursales } = useSucursal()
+  const { sucursales } = useSucursal()
   const [historial, setHistorial] = useState<Traslado[]>([])
   const [productos, setProductos] = useState<Producto[]>([])
   const [origenId, setOrigenId] = useState<string>('')
@@ -32,11 +32,14 @@ export default function Traslados() {
   const [q, setQ] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Default: depósito → primera sucursal de venta
+  // Default: primera → segunda sucursal de venta
   useEffect(() => {
-    if (!origenId && deposito?.id) setOrigenId(String(deposito.id))
-    if (!destinoId && sucursales[0]?.id) setDestinoId(String(sucursales[0].id))
-  }, [deposito?.id, sucursales, origenId, destinoId])
+    if (!origenId && sucursales[0]?.id) setOrigenId(String(sucursales[0].id))
+    if (!destinoId && sucursales[1]?.id) setDestinoId(String(sucursales[1].id))
+    else if (!destinoId && sucursales[0]?.id && origenId && origenId !== String(sucursales[0].id)) {
+      setDestinoId(String(sucursales[0].id))
+    }
+  }, [sucursales, origenId, destinoId])
 
   async function loadHistorial() {
     const { data } = await api.get<Traslado[]>('/traslados')
@@ -63,8 +66,8 @@ export default function Traslados() {
     void loadProductosOrigen(origenId).catch(() => toast.error('Error al cargar productos'))
   }, [origenId])
 
-  const origenes = todasSucursales
-  const destinos = todasSucursales.filter((s) => String(s.id) !== origenId)
+  const origenes = sucursales
+  const destinos = sucursales.filter((s) => String(s.id) !== origenId)
 
   const origenNombre = origenes.find((s) => String(s.id) === origenId)?.nombre || 'Origen'
   const destinoNombre = destinos.find((s) => String(s.id) === destinoId)?.nombre || 'Destino'
@@ -179,7 +182,7 @@ export default function Traslados() {
       <div>
         <h2 className="page-title">Traslados</h2>
         <p className="text-slate-500 text-sm">
-          Mové stock del depósito a una sucursal, o entre sucursales.
+          Mové stock entre sucursales de venta.
         </p>
       </div>
 

@@ -20,11 +20,12 @@ type CartItem = {
 }
 
 export default function NuevaCompra() {
-  const { deposito } = useSucursal()
+  const { sucursales } = useSucursal()
   const navigate = useNavigate()
   const [productos, setProductos] = useState<Producto[]>([])
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
+  const [sucursalDestinoId, setSucursalDestinoId] = useState('')
   const [proveedorId, setProveedorId] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
   const [q, setQ] = useState('')
@@ -40,8 +41,14 @@ export default function NuevaCompra() {
     categoria_id: '',
   })
 
+  useEffect(() => {
+    if (!sucursalDestinoId && sucursales[0]?.id) {
+      setSucursalDestinoId(String(sucursales[0].id))
+    }
+  }, [sucursales, sucursalDestinoId])
+
   async function load() {
-    const params = deposito?.id ? { sucursal_id: deposito.id } : {}
+    const params = sucursalDestinoId ? { sucursal_id: Number(sucursalDestinoId) } : {}
     const [p, pr, cats] = await Promise.all([
       api.get<Producto[]>('/productos', { params }),
       api.get<Proveedor[]>('/proveedores'),
@@ -54,7 +61,7 @@ export default function NuevaCompra() {
 
   useEffect(() => {
     void load().catch(() => toast.error('Error al cargar datos'))
-  }, [deposito?.id])
+  }, [sucursalDestinoId])
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -126,6 +133,10 @@ export default function NuevaCompra() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
+    if (!sucursalDestinoId) {
+      toast.error('Elegí la sucursal destino')
+      return
+    }
     if (cart.length === 0) {
       toast.error('Agregá al menos un producto')
       return
@@ -133,6 +144,7 @@ export default function NuevaCompra() {
     setSaving(true)
     try {
       await api.post('/compras', {
+        sucursal_id: Number(sucursalDestinoId),
         proveedor_id: proveedorId ? Number(proveedorId) : null,
         items: cart.map((i) => ({
           producto_id: i.producto_id,
@@ -140,7 +152,9 @@ export default function NuevaCompra() {
           precio_unitario: i.precio_unitario,
         })),
       })
-      toast.success('Compra registrada en el depósito. Usá Traslados para enviar a sucursales.')
+      const destNombre =
+        sucursales.find((s) => String(s.id) === sucursalDestinoId)?.nombre || 'la sucursal'
+      toast.success(`Compra registrada. Stock ingresado en ${destNombre}.`)
       navigate('/compras')
     } catch {
       toast.error('No se pudo registrar la compra')
@@ -196,8 +210,7 @@ export default function NuevaCompra() {
         <div>
           <h2 className="font-display text-3xl tracking-wide text-brand-black">Nueva compra</h2>
           <p className="text-slate-500 text-sm">
-            El stock ingresa al <span className="font-medium text-brand-black">Depósito</span>.
-            Después lo trasladás a cada sucursal.
+            Elegí proveedor y la sucursal donde ingresa el stock.
           </p>
         </div>
         <Link to="/compras" className="text-sm font-semibold text-slate-600 hover:underline">
@@ -246,7 +259,7 @@ export default function NuevaCompra() {
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">{p.nombre}</p>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Stock depósito: {p.stock ?? 0} · Costo {money(Number(p.precio_costo))}
+                        Stock: {p.stock ?? 0} · Costo {money(Number(p.precio_costo))}
                       </p>
                     </div>
                     <button
@@ -273,6 +286,23 @@ export default function NuevaCompra() {
           <h3 className="font-semibold flex items-center gap-2">
             <ShoppingCart size={18} /> Carrito ({cart.length})
           </h3>
+
+          <label className="block text-sm">
+            <span className="text-slate-600">Sucursal destino</span>
+            <select
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              value={sucursalDestinoId}
+              onChange={(e) => setSucursalDestinoId(e.target.value)}
+              required
+            >
+              <option value="">Elegí sucursal…</option>
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="block text-sm">
             <span className="text-slate-600">Proveedor</span>
@@ -387,7 +417,7 @@ export default function NuevaCompra() {
               </button>
             </div>
             <p className="text-xs text-slate-500">
-              Se crea con stock 0 y se agrega al carrito. Al confirmar la compra suman las unidades en el depósito.
+              Se crea con stock 0 y se agrega al carrito. Al confirmar la compra suman las unidades en la sucursal destino.
             </p>
             <input
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"

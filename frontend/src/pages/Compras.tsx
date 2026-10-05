@@ -215,7 +215,7 @@ export default function Compras() {
         <div>
           <h2 className="page-title">Compras</h2>
           <p className="text-slate-500 text-sm">
-            Toda compra ingresa al depósito. Después se traslada a las sucursales.
+            Cada compra ingresa stock en la sucursal que elijas.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -242,6 +242,7 @@ export default function Compras() {
             <tr>
               <th className="px-4 py-2">#</th>
               <th className="px-4 py-2">Fecha</th>
+              <th className="px-4 py-2">Sucursal</th>
               <th className="px-4 py-2">Proveedor</th>
               <th className="px-4 py-2">Total</th>
               <th className="px-4 py-2" />
@@ -250,7 +251,7 @@ export default function Compras() {
           <tbody>
             {compras.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                   Todavía no hay compras. Creá una con varios productos.
                 </td>
               </tr>
@@ -259,6 +260,7 @@ export default function Compras() {
               <tr key={c.id} className="border-t border-slate-100">
                 <td className="px-4 py-2">{c.id}</td>
                 <td className="px-4 py-2">{new Date(c.fecha).toLocaleString('es-AR')}</td>
+                <td className="px-4 py-2">{c.sucursal_nombre || '—'}</td>
                 <td className="px-4 py-2">{c.proveedor_nombre || '—'}</td>
                 <td className="px-4 py-2 font-semibold">{money(Number(c.total))}</td>
                 <td className="px-4 py-2 text-right">
@@ -296,10 +298,14 @@ export default function Compras() {
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm border-t border-slate-100 pt-2">
                 <div>
+                  <span className="text-xs text-slate-500 block">Sucursal</span>
+                  {c.sucursal_nombre || '—'}
+                </div>
+                <div>
                   <span className="text-xs text-slate-500 block">Proveedor</span>
                   {c.proveedor_nombre || '—'}
                 </div>
-                <div>
+                <div className="col-span-2">
                   <span className="text-xs text-slate-500 block">Total</span>
                   <span className="font-bold">{money(Number(c.total))}</span>
                 </div>
@@ -322,6 +328,7 @@ export default function Compras() {
                 <h3 className="font-display text-2xl">Compra #{detalle.id}</h3>
                 <p className="text-xs text-slate-500">
                   {new Date(detalle.fecha).toLocaleString('es-AR')}
+                  {detalle.sucursal_nombre ? ` · ${detalle.sucursal_nombre}` : ''}
                   {detalle.proveedor_nombre ? ` · ${detalle.proveedor_nombre}` : ''}
                 </p>
               </div>

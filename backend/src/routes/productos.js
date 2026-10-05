@@ -1,7 +1,6 @@
 import express from 'express'
 import pool from '../db.js'
 import { requireRole } from '../middleware/requireAuth.js'
-import { getDepositoId } from '../utils/deposito.js'
 
 const router = express.Router()
 
@@ -66,8 +65,8 @@ router.get('/', async (req, res) => {
            ON ss.producto_id = p.id AND ss.sucursal_id = s.id
          LEFT JOIN precio_sucursal ps
            ON ps.producto_id = p.id AND ps.sucursal_id = s.id
-         WHERE s.activa = TRUE
-         ORDER BY p.id, s.es_deposito DESC, s.nombre`
+         WHERE s.activa = TRUE AND COALESCE(s.es_deposito, FALSE) = FALSE
+         ORDER BY p.id, s.nombre`
       )
       const byProduct = new Map()
       for (const r of detail.rows) {
@@ -157,8 +156,10 @@ router.get('/:id', async (req, res) => {
          ON ss.sucursal_id = s.id AND ss.producto_id = p.id
        LEFT JOIN precio_sucursal ps
          ON ps.sucursal_id = s.id AND ps.producto_id = p.id
-       WHERE s.activa = TRUE AND p.id = $1
-       ORDER BY s.es_deposito DESC, s.nombre`,
+       WHERE s.activa = TRUE
+         AND COALESCE(s.es_deposito, FALSE) = FALSE
+         AND p.id = $1
+       ORDER BY s.nombre`,
       [req.params.id]
     )
 
@@ -167,19 +168,17 @@ router.get('/:id', async (req, res) => {
       stock_por_sucursal: porSucursal.rows.map((r) => ({
         sucursal_id: r.sucursal_id,
         sucursal_nombre: r.sucursal_nombre,
-        es_deposito: r.es_deposito,
+        es_deposito: false,
         cantidad: r.cantidad,
       })),
-      // Precios solo en sucursales de venta
-      precios_por_sucursal: porSucursal.rows
-        .filter((r) => !r.es_deposito)
-        .map((r) => ({
-          sucursal_id: r.sucursal_id,
-          sucursal_nombre: r.sucursal_nombre,
-          precio: r.precio,
-          porcentaje_ganancia: r.porcentaje_ganancia,
-        })),
-    })  } catch (err) {
+      precios_por_sucursal: porSucursal.rows.map((r) => ({
+        sucursal_id: r.sucursal_id,
+        sucursal_nombre: r.sucursal_nombre,
+        precio: r.precio,
+        porcentaje_ganancia: r.porcentaje_ganancia,
+      })),
+    })
+  } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Error al obtener producto' })
   }
@@ -271,6 +270,12 @@ router.post('/', requireRole('admin'), async (req, res) => {
     if (Array.isArray(stock_por_sucursal)) {
       for (const row of stock_por_sucursal) {
         if (!row?.sucursal_id) continue
+        const dest = await client.query(
+          `SELECT id FROM sucursales
+           WHERE id = $1 AND activa = TRUE AND COALESCE(es_deposito, FALSE) = FALSE`,
+          [row.sucursal_id]
+        )
+        if (!dest.rows.length) continue
         await client.query(
           `INSERT INTO stock_sucursal (producto_id, sucursal_id, cantidad)
            VALUES ($1, $2, $3)
@@ -280,17 +285,35 @@ router.post('/', requireRole('admin'), async (req, res) => {
         )
       }
     } else {
-      // Stock inicial siempre al depósito (salvo que manden desglose por sucursal)
-      const depositoId = await getDepositoId(client)
+      // Stock inicial a la primera sucursal de venta (o la indicada)
       const qty = Math.max(0, Number(stock_inicial) || 0)
       if (qty > 0) {
-        await client.query(
-          `INSERT INTO stock_sucursal (producto_id, sucursal_id, cantidad)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (producto_id, sucursal_id)
-           DO UPDATE SET cantidad = EXCLUDED.cantidad`,
-          [producto.id, depositoId, qty]
-        )
+        let destinoId = sucursal_id ? Number(sucursal_id) : null
+        if (destinoId) {
+          const dest = await client.query(
+            `SELECT id FROM sucursales
+             WHERE id = $1 AND activa = TRUE AND COALESCE(es_deposito, FALSE) = FALSE`,
+            [destinoId]
+          )
+          if (!dest.rows.length) destinoId = null
+        }
+        if (!destinoId) {
+          const first = await client.query(
+            `SELECT id FROM sucursales
+             WHERE activa = TRUE AND COALESCE(es_deposito, FALSE) = FALSE
+             ORDER BY nombre LIMIT 1`
+          )
+          destinoId = first.rows[0]?.id ?? null
+        }
+        if (destinoId) {
+          await client.query(
+            `INSERT INTO stock_sucursal (producto_id, sucursal_id, cantidad)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (producto_id, sucursal_id)
+             DO UPDATE SET cantidad = EXCLUDED.cantidad`,
+            [producto.id, destinoId, qty]
+          )
+        }
       }
     }
 
@@ -379,6 +402,12 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
     if (Array.isArray(stock_por_sucursal)) {
       for (const row of stock_por_sucursal) {
         if (!row?.sucursal_id) continue
+        const dest = await client.query(
+          `SELECT id FROM sucursales
+           WHERE id = $1 AND COALESCE(es_deposito, FALSE) = FALSE`,
+          [row.sucursal_id]
+        )
+        if (!dest.rows.length) continue
         await client.query(
           `INSERT INTO stock_sucursal (producto_id, sucursal_id, cantidad)
            VALUES ($1, $2, $3)

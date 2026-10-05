@@ -113,6 +113,15 @@ router.post('/', async (req, res) => {
   try {
     await client.query('BEGIN')
 
+    const sucursalOk = await client.query(
+      `SELECT id FROM sucursales
+       WHERE id = $1 AND activa = TRUE AND COALESCE(es_deposito, FALSE) = FALSE`,
+      [sucursal_id]
+    )
+    if (!sucursalOk.rows.length) {
+      throw Object.assign(new Error('Sucursal inválida'), { status: 400 })
+    }
+
     if (metodo === 'mercadopago') {
       if (!cuenta_mp_id) {
         throw Object.assign(

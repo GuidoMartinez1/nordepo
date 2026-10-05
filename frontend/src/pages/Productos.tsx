@@ -1,4 +1,4 @@
-import { useEffect, useState, Fragment } from 'react'
+import { useEffect, useMemo, useState, Fragment } from 'react'
 import type { FormEvent } from 'react'
 import toast from 'react-hot-toast'
 import { Eye, History, Pencil, Plus, ShoppingBag, Trash2, WifiOff, X } from 'lucide-react'
@@ -7,6 +7,7 @@ import api from '../services/api'
 import { useSucursal } from '../contexts/SucursalContext'
 import { useAuth } from '../contexts/AuthContext'
 import { money } from '../utils/money'
+import { getCategoryIcon } from '../utils/categoryIcons'
 import type { Producto } from '../types'
 import {
   formatCacheSavedAt,
@@ -149,16 +150,13 @@ function DetalleOtrasSucursales({
         )
       })}
       {stocks
-        .filter((s) => s.es_deposito || !precios.some((p) => p.sucursal_id === s.sucursal_id))
+        .filter((s) => !precios.some((p) => p.sucursal_id === s.sucursal_id))
         .map((s) => (
           <div
             key={`otras-s-${producto.id}-${s.sucursal_id}`}
             className="flex justify-between gap-3"
           >
-            <span className="text-slate-600">
-              {s.sucursal_nombre}
-              {s.es_deposito ? ' (depósito)' : ''}
-            </span>
+            <span className="text-slate-600">{s.sucursal_nombre}</span>
             <span className="font-medium tabular-nums">stock {s.cantidad}</span>
           </div>
         ))}
@@ -167,7 +165,7 @@ function DetalleOtrasSucursales({
 }
 
 export default function Productos() {
-  const { sucursalId, sucursal, sucursales, todasSucursales, esTodas } = useSucursal()
+  const { sucursalId, sucursal, sucursales, esTodas } = useSucursal()
   const { isAdmin } = useAuth()
   const [items, setItems] = useState<Producto[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
@@ -308,11 +306,11 @@ export default function Productos() {
   }
 
   function emptyStock(): StockSucursal[] {
-    return todasSucursales.map((s) => ({
+    return sucursales.map((s) => ({
       sucursal_id: s.id,
       sucursal_nombre: s.nombre,
       cantidad: '',
-      es_deposito: !!s.es_deposito,
+      es_deposito: false,
     }))
   }
 
@@ -358,12 +356,14 @@ export default function Productos() {
       })
       setStockPorSucursal(
         data.stock_por_sucursal?.length
-          ? data.stock_por_sucursal.map((s) => ({
-              sucursal_id: s.sucursal_id,
-              sucursal_nombre: s.sucursal_nombre,
-              cantidad: s.cantidad ? String(s.cantidad) : '',
-              es_deposito: !!s.es_deposito,
-            }))
+          ? data.stock_por_sucursal
+              .filter((s) => !s.es_deposito)
+              .map((s) => ({
+                sucursal_id: s.sucursal_id,
+                sucursal_nombre: s.sucursal_nombre,
+                cantidad: s.cantidad ? String(s.cantidad) : '',
+                es_deposito: false,
+              }))
           : emptyStock()
       )
       setPreciosPorSucursal(
@@ -539,6 +539,27 @@ export default function Productos() {
     return true
   })
 
+  const categoriasConProductos = useMemo(() => {
+    const counts = new Map<number, number>()
+    let sinCat = 0
+    for (const p of items) {
+      if (p.categoria_id == null) sinCat += 1
+      else counts.set(p.categoria_id, (counts.get(p.categoria_id) || 0) + 1)
+    }
+    const list = categorias
+      .map((c) => ({ ...c, count: counts.get(c.id) || 0 }))
+      .filter((c) => c.count > 0)
+    if (sinCat > 0) {
+      list.push({ id: -1, nombre: 'Sin categoría', count: sinCat })
+    }
+    return list
+  }, [categorias, items])
+
+  function toggleCategoria(catId: number) {
+    const value = catId === -1 ? 'none' : String(catId)
+    setCategoriaFiltro((prev) => (prev === value ? '' : value))
+  }
+
   const hayFiltros = Boolean(
     q || stockFiltro || categoriaFiltro || (isAdmin && gananciaFiltro)
   )
@@ -698,7 +719,7 @@ export default function Productos() {
 
       {!isAdmin ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
               placeholder="Buscar por nombre…"
@@ -718,20 +739,41 @@ export default function Productos() {
               <option value="4">Stock: 4</option>
               <option value=">4">Stock: &gt; 4</option>
             </select>
-            <select
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
-              value={categoriaFiltro}
-              onChange={(e) => setCategoriaFiltro(e.target.value)}
-            >
-              <option value="">Todas las categorías</option>
-              <option value="none">Sin categoría</option>
-              {categorias.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.nombre}
-                </option>
-              ))}
-            </select>
           </div>
+
+          {categoriasConProductos.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              {categoriasConProductos.map((cat) => {
+                const value = cat.id === -1 ? 'none' : String(cat.id)
+                const isActive = categoriaFiltro === value
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => toggleCategoria(cat.id)}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${
+                      isActive
+                        ? 'bg-brand-lime/20 border-brand-black ring-1 ring-brand-black shadow-sm text-brand-black'
+                        : 'bg-white border-slate-200 hover:border-brand-lime text-slate-600 hover:text-brand-black'
+                    }`}
+                  >
+                    {getCategoryIcon(cat.nombre)}
+                    <span
+                      className={`text-xs font-bold text-center leading-tight ${
+                        isActive ? 'text-brand-black' : 'text-slate-700'
+                      }`}
+                    >
+                      {cat.nombre}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      ({cat.count})
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
             <p>
               Mostrando <span className="font-semibold text-brand-black">{filtered.length}</span> de{' '}
@@ -847,7 +889,7 @@ export default function Productos() {
         </>
       ) : (
         <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <input
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
           placeholder="Buscar por nombre o código…"
@@ -869,19 +911,6 @@ export default function Productos() {
         </select>
         <select
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
-          value={categoriaFiltro}
-          onChange={(e) => setCategoriaFiltro(e.target.value)}
-        >
-          <option value="">Todas las categorías</option>
-          <option value="none">Sin categoría</option>
-          {categorias.map((c) => (
-            <option key={c.id} value={String(c.id)}>
-              {c.nombre}
-            </option>
-          ))}
-        </select>
-        <select
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
           value={gananciaFiltro}
           onChange={(e) => setGananciaFiltro(e.target.value)}
         >
@@ -892,6 +921,39 @@ export default function Productos() {
           <option value="30-999">Excelente (&gt; 30%)</option>
         </select>
       </div>
+
+      {categoriasConProductos.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          {categoriasConProductos.map((cat) => {
+            const value = cat.id === -1 ? 'none' : String(cat.id)
+            const isActive = categoriaFiltro === value
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => toggleCategoria(cat.id)}
+                className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${
+                  isActive
+                    ? 'bg-brand-lime/20 border-brand-black ring-1 ring-brand-black shadow-sm text-brand-black'
+                    : 'bg-white border-slate-200 hover:border-brand-lime text-slate-600 hover:text-brand-black'
+                }`}
+              >
+                {getCategoryIcon(cat.nombre)}
+                <span
+                  className={`text-xs font-bold text-center leading-tight ${
+                    isActive ? 'text-brand-black' : 'text-slate-700'
+                  }`}
+                >
+                  {cat.nombre}
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  ({cat.count})
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
         <p>
@@ -938,7 +1000,18 @@ export default function Productos() {
                   <Fragment key={p.id}>
                   <tr className="border-t border-slate-100">
                     <td className="px-4 py-2 font-medium">{p.nombre}</td>
-                    <td className="px-4 py-2">{p.categoria_nombre || '—'}</td>
+                    <td className="px-4 py-2">
+                      {p.categoria_nombre ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-slate-500 shrink-0">
+                            {getCategoryIcon(p.categoria_nombre, 'h-4 w-4')}
+                          </span>
+                          {p.categoria_nombre}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-slate-500">{money(Number(p.precio_costo))}</td>
                     <td className="px-4 py-2">
                       <PrecioLista value={Number(p.precio)} />
@@ -1037,7 +1110,16 @@ export default function Productos() {
                 <div className="flex justify-between items-start gap-2 mb-3">
                   <div className="min-w-0 flex-1">
                     <h3 className="font-bold text-brand-black leading-snug">{p.nombre}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">{p.categoria_nombre || 'Sin categoría'}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 inline-flex items-center gap-1">
+                      {p.categoria_nombre ? (
+                        <>
+                          {getCategoryIcon(p.categoria_nombre, 'h-3.5 w-3.5')}
+                          {p.categoria_nombre}
+                        </>
+                      ) : (
+                        'Sin categoría'
+                      )}
+                    </p>
                   </div>
                   <div className="flex gap-0.5 shrink-0">
                     {!esTodas && (
@@ -1253,26 +1335,6 @@ export default function Productos() {
                       </tr>
                     </thead>
                     <tbody>
-                      {stockPorSucursal
-                        .filter((s) => s.es_deposito)
-                        .map((s) => (
-                          <tr key={s.sucursal_id} className="border-t border-slate-100 bg-slate-50/80">
-                            <td className="px-3 py-2 font-medium" colSpan={2}>
-                              {s.sucursal_nombre}
-                              <span className="text-xs text-slate-400"> · sin precio de venta</span>
-                            </td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                className="w-20 rounded border border-slate-300 px-2 py-1"
-                                value={s.cantidad}
-                                onChange={(e) => setStockSucursal(s.sucursal_id, e.target.value)}
-                                placeholder="0"
-                              />
-                            </td>
-                          </tr>
-                        ))}
                       {preciosPorSucursal.map((p) => {
                         const stock =
                           stockPorSucursal.find((s) => s.sucursal_id === p.sucursal_id)
@@ -1317,7 +1379,7 @@ export default function Productos() {
                 </div>
                 <p className="text-xs text-slate-500 mt-2">
                   Si cambiás el precio de una sucursal a mano, el % de esa sucursal se ajusta solo.
-                  Las compras van al depósito; usá Traslados para mandar stock.
+                  Las compras ingresan stock directo en la sucursal destino.
                 </p>
               </div>
 

@@ -42,6 +42,14 @@ function getFirstDayOfMonth(): string {
   return `${yyyy}-${mm}-01`
 }
 
+function todayLocal(): string {
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
 function formatDate(dateString: string) {
   if (!dateString) return '-'
   // Evita el -1 día por timezone: usar solo YYYY-MM-DD
@@ -111,7 +119,7 @@ export default function Ganancias() {
           <Calendar className="h-4 w-4 text-slate-500 shrink-0" />
           Filtro de fechas
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-full">
           <div className="min-w-0 w-full overflow-hidden">
             <label className="block text-xs font-medium text-slate-600 mb-1">Desde</label>
             <input
@@ -129,6 +137,20 @@ export default function Ganancias() {
               onChange={(e) => setFechaHasta(e.target.value)}
               className={dateInputClass}
             />
+          </div>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => {
+                const hoy = todayLocal()
+                setFechaDesde(hoy)
+                setFechaHasta(hoy)
+              }}
+              className="btn-primary w-full px-3 py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-1.5"
+            >
+              <Calendar className="h-4 w-4" />
+              Hoy
+            </button>
           </div>
         </div>
       </div>

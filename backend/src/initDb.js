@@ -4,9 +4,9 @@ import 'dotenv/config'
 
 /**
  * Schema NORDEPO:
- * - Stock por sucursal + depósito central
- * - Compras ingresan al depósito; traslados a sucursales de venta
- * - Precio de venta / % por sucursal (no en depósito)
+ * - Stock y precio de venta / % por sucursal de venta
+ * - Compras ingresan en la sucursal destino elegida
+ * - Traslados solo entre sucursales de venta
  * - Sin bolsas / precio_kg / AFIP
  */
 export async function initDatabase() {
@@ -315,12 +315,7 @@ export async function initDatabase() {
     await client.query('CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha)')
     await client.query('CREATE INDEX IF NOT EXISTS idx_gastos_categoria ON gastos(categoria)')
 
-    // Sucursales: depósito + locales de venta
-    await client.query(`
-      INSERT INTO sucursales (nombre, codigo, es_deposito)
-      VALUES ('Depósito', 'DEPOSITO', TRUE)
-      ON CONFLICT (codigo) DO UPDATE SET es_deposito = TRUE, nombre = 'Depósito'
-    `)
+    // Sucursales de venta (Galería / Oulet). No se crea Depósito.
     await client.query(`
       INSERT INTO sucursales (nombre, codigo, es_deposito)
       VALUES
@@ -328,6 +323,45 @@ export async function initDatabase() {
         ('Oulet', 'NORTE', FALSE)
       ON CONFLICT (codigo) DO UPDATE
       SET nombre = EXCLUDED.nombre
+    `)
+
+    // Migración one-shot: stock del Depósito → primera sucursal de venta; desactivar Depósito
+    await client.query(`
+      DO $$
+      DECLARE
+        dep_id INTEGER;
+        venta_id INTEGER;
+      BEGIN
+        SELECT id INTO dep_id
+        FROM sucursales
+        WHERE COALESCE(es_deposito, FALSE) = TRUE OR codigo = 'DEPOSITO'
+        LIMIT 1;
+
+        IF dep_id IS NULL THEN
+          RETURN;
+        END IF;
+
+        SELECT id INTO venta_id
+        FROM sucursales
+        WHERE activa = TRUE AND COALESCE(es_deposito, FALSE) = FALSE
+        ORDER BY nombre
+        LIMIT 1;
+
+        IF venta_id IS NOT NULL THEN
+          INSERT INTO stock_sucursal (producto_id, sucursal_id, cantidad)
+          SELECT producto_id, venta_id, cantidad
+          FROM stock_sucursal
+          WHERE sucursal_id = dep_id AND cantidad > 0
+          ON CONFLICT (producto_id, sucursal_id)
+          DO UPDATE SET cantidad = stock_sucursal.cantidad + EXCLUDED.cantidad;
+
+          DELETE FROM stock_sucursal WHERE sucursal_id = dep_id;
+        END IF;
+
+        UPDATE sucursales
+        SET activa = FALSE, es_deposito = TRUE, nombre = 'Depósito'
+        WHERE id = dep_id;
+      END $$;
     `)
 
     // Usuario admin
