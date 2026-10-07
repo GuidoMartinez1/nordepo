@@ -3,10 +3,13 @@ import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
+  Banknote,
+  CreditCard,
   DollarSign,
   MapPin,
   Minus,
   Plus,
+  Smartphone,
   Store,
   Trash2,
   Trophy,
@@ -46,6 +49,12 @@ type Linea = LineaProducto | LineaDirecto | LineaRecargo
 
 const RECARGO_KEY = 'recargo-tarjeta'
 const RECARGO_DEFAULT_PCT = 15
+
+const METODOS_PAGO = [
+  { id: 'efectivo', label: 'Efectivo', icon: Banknote },
+  { id: 'mercadopago', label: 'Mercado Pago', icon: Smartphone },
+  { id: 'tarjeta', label: 'Tarjeta', icon: CreditCard },
+]
 
 export default function NuevaVenta() {
   const { sucursalId, sucursal, esTodas, sucursales, setSucursalId } = useSucursal()
@@ -546,21 +555,33 @@ export default function NuevaVenta() {
               </li>
             ))}
           </ul>
-          <label className="block text-sm">
-            <span className="text-slate-500">Método de pago</span>
-            <select
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              value={metodoPago}
-              onChange={(e) => {
-                setMetodoPago(e.target.value)
-                if (e.target.value !== 'mercadopago') setCuentaMpId('')
-              }}
-            >
-              <option value="efectivo">Efectivo</option>
-              <option value="mercadopago">Mercado Pago</option>
-              <option value="tarjeta">Tarjeta</option>
-            </select>
-          </label>
+          <div className="space-y-2">
+            <span className="text-sm font-medium text-slate-500">Método de pago</span>
+            <div className="grid grid-cols-3 gap-2">
+              {METODOS_PAGO.map((opcion) => {
+                const Icon = opcion.icon
+                const activo = metodoPago === opcion.id
+                return (
+                  <button
+                    key={opcion.id}
+                    type="button"
+                    onClick={() => {
+                      setMetodoPago(opcion.id)
+                      if (opcion.id !== 'mercadopago') setCuentaMpId('')
+                    }}
+                    className={`min-h-[58px] rounded-lg border px-2 py-2 text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 ${
+                      activo
+                        ? 'bg-brand-black border-brand-black text-brand-lime shadow-sm'
+                        : 'bg-white border-slate-300 text-slate-600 hover:border-brand-lime hover:text-brand-black'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="leading-tight text-center">{opcion.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
           {metodoPago === 'mercadopago' && (
             <label className="block text-sm">
               <span className="text-slate-500">Alias / cuenta destino</span>

@@ -289,14 +289,28 @@ export default function Actualizaciones() {
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-display text-2xl">Actualizar precio</h3>
-              <button type="button" onClick={() => setSelected(null)} className="p-1 rounded hover:bg-slate-100">
+            <div className="flex justify-between items-start gap-3 border-b border-slate-100 pb-3">
+              <div className="min-w-0">
+                <h3 className="font-display text-2xl">Actualizar precio de venta</h3>
+                <p className="mt-1 text-base font-semibold text-brand-black break-words">
+                  {selected.producto_nombre}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="p-1 rounded hover:bg-slate-100 shrink-0"
+              >
                 <X size={18} />
               </button>
             </div>
 
-            <p className="text-sm font-medium text-brand-black">{selected.producto_nombre}</p>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <span className="text-sm font-medium text-slate-600">Precio de venta actual</span>
+              <span className="text-xl font-black text-brand-black">
+                {money(Number(selected.precio_venta_actual))}
+              </span>
+            </div>
 
             <div className="space-y-2">
               <p className="text-sm text-slate-600 font-medium">¿Dónde aplicar el precio?</p>
