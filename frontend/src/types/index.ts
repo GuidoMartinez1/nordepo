@@ -36,6 +36,7 @@ export type StockSucursalItem = {
   es_deposito?: boolean
   cantidad: number
   precio?: number
+  porcentaje_ganancia?: number
 }
 
 export type Producto = {
