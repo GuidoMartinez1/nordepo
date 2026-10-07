@@ -45,7 +45,7 @@ type LineaRecargo = {
 type Linea = LineaProducto | LineaDirecto | LineaRecargo
 
 const RECARGO_KEY = 'recargo-tarjeta'
-const RECARGO_DEFAULT_PCT = 10
+const RECARGO_DEFAULT_PCT = 15
 
 export default function NuevaVenta() {
   const { sucursalId, sucursal, esTodas, sucursales, setSucursalId } = useSucursal()
