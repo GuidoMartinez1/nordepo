@@ -12,6 +12,7 @@ import Categorias from './pages/Categorias'
 import Proveedores from './pages/Proveedores'
 import Ventas from './pages/Ventas'
 import NuevaVenta from './pages/NuevaVenta'
+import Cambios from './pages/Cambios'
 import Compras from './pages/Compras'
 import NuevaCompra from './pages/NuevaCompra'
 import Traslados from './pages/Traslados'
@@ -102,6 +103,7 @@ export default function App() {
                       />
                       <Route path="/ventas" element={<Ventas />} />
                       <Route path="/ventas/nueva" element={<NuevaVenta />} />
+                      <Route path="/cambios" element={<Cambios />} />
                       <Route
                         path="/compras"
                         element={

@@ -367,6 +367,16 @@ export default function Ventas() {
               </button>
             </div>
             <div className="p-4 sm:p-5">
+              {detalle.notas && (
+                <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                    Observación
+                  </p>
+                  <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap break-words">
+                    {detalle.notas}
+                  </p>
+                </div>
+              )}
               <div className="space-y-3">
                 {(detalle.detalles || []).map((d) => (
                   <div

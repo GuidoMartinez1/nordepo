@@ -28,6 +28,7 @@ export type Venta = {
   cuenta_mp_alias?: string | null
   usuario_id?: number | null
   usuario_nombre?: string | null
+  notas?: string | null
 }
 
 export type StockSucursalItem = {

@@ -265,17 +265,37 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
       [venta.id]
     )
 
-    if (venta.estado === 'completada' || venta.estado === 'adeuda') {
+    if (venta.estado === 'completada' || venta.estado === 'adeuda' || venta.estado === 'cambio') {
       for (const d of detalles) {
         if (!d.producto_id) continue
-        await client.query(
-          `INSERT INTO stock_sucursal (producto_id, sucursal_id, cantidad)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (producto_id, sucursal_id)
-           DO UPDATE SET cantidad = stock_sucursal.cantidad + EXCLUDED.cantidad`,
-          [d.producto_id, venta.sucursal_id, d.cantidad]
-        )
-        await restarAFuturosPedidos(client, d.producto_id, d.cantidad)
+        const cantidad = Number(d.cantidad)
+
+        if (cantidad > 0) {
+          await client.query(
+            `INSERT INTO stock_sucursal (producto_id, sucursal_id, cantidad)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (producto_id, sucursal_id)
+             DO UPDATE SET cantidad = stock_sucursal.cantidad + EXCLUDED.cantidad`,
+            [d.producto_id, venta.sucursal_id, cantidad]
+          )
+          await restarAFuturosPedidos(client, d.producto_id, cantidad)
+        } else if (cantidad < 0) {
+          const qty = Math.abs(cantidad)
+          const upd = await client.query(
+            `UPDATE stock_sucursal
+             SET cantidad = cantidad - $1
+             WHERE producto_id = $2 AND sucursal_id = $3 AND cantidad >= $1
+             RETURNING cantidad`,
+            [qty, d.producto_id, venta.sucursal_id]
+          )
+          if (!upd.rows.length) {
+            throw Object.assign(
+              new Error(`No se puede revertir: stock insuficiente para producto ${d.producto_id}`),
+              { status: 400 }
+            )
+          }
+          await sumarAFuturosPedidos(client, d.producto_id, qty)
+        }
       }
     }
 
@@ -285,7 +305,7 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK')
     console.error(err)
-    res.status(500).json({ error: 'Error al eliminar venta' })
+    res.status(err.status || 500).json({ error: err.message || 'Error al eliminar venta' })
   } finally {
     client.release()
   }

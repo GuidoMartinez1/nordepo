@@ -174,11 +174,19 @@ export async function initDatabase() {
         id SERIAL PRIMARY KEY,
         venta_id INTEGER NOT NULL REFERENCES ventas(id) ON DELETE CASCADE,
         producto_id INTEGER REFERENCES productos(id) ON DELETE SET NULL,
-        cantidad INTEGER NOT NULL CHECK (cantidad > 0),
+        cantidad INTEGER NOT NULL CHECK (cantidad <> 0),
         precio_unitario DECIMAL(12,2) NOT NULL,
         subtotal DECIMAL(12,2) NOT NULL,
         descripcion VARCHAR(255)
       )
+    `)
+    await client.query(`
+      ALTER TABLE detalles_venta
+      DROP CONSTRAINT IF EXISTS detalles_venta_cantidad_check
+    `)
+    await client.query(`
+      ALTER TABLE detalles_venta
+      ADD CONSTRAINT detalles_venta_cantidad_check CHECK (cantidad <> 0)
     `)
     await client.query(`
       ALTER TABLE detalles_venta

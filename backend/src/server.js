@@ -12,6 +12,7 @@ import categoriasRoutes from './routes/categorias.js'
 import productosRoutes from './routes/productos.js'
 import proveedoresRoutes from './routes/proveedores.js'
 import ventasRoutes from './routes/ventas.js'
+import cambiosRoutes from './routes/cambios.js'
 import comprasRoutes from './routes/compras.js'
 import trasladosRoutes from './routes/traslados.js'
 import statsRoutes from './routes/stats.js'
@@ -69,6 +70,7 @@ app.use('/api/categorias', categoriasRoutes)
 app.use('/api/productos', productosRoutes)
 app.use('/api/proveedores', requireRole('admin'), proveedoresRoutes)
 app.use('/api/ventas', ventasRoutes)
+app.use('/api/cambios', cambiosRoutes)
 app.use('/api/cuentas-mp', cuentasMpRoutes)
 app.use('/api/empleados', empleadosRoutes)
 app.use('/api/compras', requireRole('admin'), comprasRoutes)
