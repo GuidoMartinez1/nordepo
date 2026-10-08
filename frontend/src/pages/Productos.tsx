@@ -1298,7 +1298,7 @@ export default function Productos() {
                         className="w-full rounded-lg border-2 border-brand-black/20 px-3 py-2.5 pr-8 bg-white font-semibold text-brand-black focus:border-brand-lime focus:outline-none"
                         value={form.porcentaje_ganancia}
                         onChange={(e) => onPctChange(e.target.value)}
-                        placeholder="30"
+                        placeholder="100"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">
                         %
