@@ -42,7 +42,7 @@ const emptyForm = (): FormState => ({
   nombre: '',
   codigo: '',
   precio_costo: '',
-  porcentaje_ganancia: '30',
+  porcentaje_ganancia: '100',
   categoria_id: '',
 })
 
@@ -346,7 +346,7 @@ export default function Productos() {
       const pctInicial =
         data.precios_por_sucursal?.[0]?.porcentaje_ganancia ??
         data.porcentaje_ganancia ??
-        30
+        100
       setForm({
         nombre: data.nombre || '',
         codigo: data.codigo || '',
@@ -372,7 +372,7 @@ export default function Productos() {
               sucursal_id: p.sucursal_id,
               sucursal_nombre: p.sucursal_nombre,
               precio: p.precio ? formatNum(Number(p.precio)) : '',
-              porcentaje_ganancia: formatNum(Number(p.porcentaje_ganancia ?? 30)),
+              porcentaje_ganancia: formatNum(Number(p.porcentaje_ganancia ?? 100)),
             }))
           : emptyPrecios()
       )
@@ -470,7 +470,7 @@ export default function Productos() {
         precio: parseNum(first?.precio ?? ''),
         porcentaje_ganancia: Number.isFinite(pctGlobal)
           ? pctGlobal
-          : parseNum(first?.porcentaje_ganancia ?? '30'),
+          : parseNum(first?.porcentaje_ganancia ?? '100'),
         categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
         stock_por_sucursal: stockPorSucursal.map((s) => ({
           sucursal_id: s.sucursal_id,
@@ -479,7 +479,7 @@ export default function Productos() {
         precios_por_sucursal: preciosPorSucursal.map((p) => ({
           sucursal_id: p.sucursal_id,
           precio: parseNum(p.precio),
-          porcentaje_ganancia: parseNum(p.porcentaje_ganancia) || 30,
+          porcentaje_ganancia: parseNum(p.porcentaje_ganancia) || 100,
         })),
       }
 
