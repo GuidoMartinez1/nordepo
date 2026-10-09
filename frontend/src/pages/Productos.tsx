@@ -301,7 +301,7 @@ export default function Productos() {
       sucursal_id: s.id,
       sucursal_nombre: s.nombre,
       precio: '',
-      porcentaje_ganancia: '30',
+      porcentaje_ganancia: '100',
     }))
   }
 
@@ -392,21 +392,28 @@ export default function Productos() {
   function updatePrecioSucursal(sucursal_id: number, value: string) {
     const cleaned = sanitizeDecimal(value)
     const costo = parseNum(form.precio_costo)
+    const precioEditado = parseNum(cleaned)
+    const pctCalculado =
+      costo > 0 && cleaned !== '' && cleaned !== '.'
+        ? formatNum(calcularPorcentajeGanancia(costo, precioEditado))
+        : null
     setPreciosPorSucursal((prev) =>
       prev.map((row) => {
         if (row.sucursal_id !== sucursal_id) return row
         if (cleaned === '' || cleaned === '.') {
           return { ...row, precio: cleaned }
         }
-        const precio = parseNum(cleaned)
-        const pct = costo > 0 ? calcularPorcentajeGanancia(costo, precio) : parseNum(row.porcentaje_ganancia)
+        const pct = pctCalculado ?? formatNum(parseNum(row.porcentaje_ganancia))
         return {
           ...row,
           precio: cleaned,
-          porcentaje_ganancia: formatNum(pct),
+          porcentaje_ganancia: pct,
         }
       })
     )
+    if (pctCalculado != null) {
+      setForm((prev) => ({ ...prev, porcentaje_ganancia: pctCalculado }))
+    }
   }
 
   function onCostoChange(value: string) {

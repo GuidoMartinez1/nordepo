@@ -37,7 +37,7 @@ export default function NuevaCompra() {
     codigo: '',
     precio: '',
     precio_costo: '',
-    porcentaje_ganancia: '30',
+    porcentaje_ganancia: '100',
     categoria_id: '',
   })
 
@@ -166,9 +166,16 @@ export default function NuevaCompra() {
   function calcPrecioDesdeCosto(costoVal: string, pctVal: string) {
     const c = parseFloat(costoVal) || 0
     const pct = parseFloat(pctVal)
-    const pctFinal = Number.isFinite(pct) ? pct : 30
+    const pctFinal = Number.isFinite(pct) ? pct : 100
     if (c > 0) return (c * (1 + pctFinal / 100)).toFixed(2)
     return ''
+  }
+
+  function calcPctDesdePrecio(costoVal: string, precioVal: string) {
+    const c = parseFloat(costoVal) || 0
+    const precio = parseFloat(precioVal) || 0
+    if (c <= 0) return '100'
+    return String(Number((((precio - c) / c) * 100).toFixed(2)))
   }
 
   async function crearProducto(e: FormEvent) {
@@ -179,7 +186,7 @@ export default function NuevaCompra() {
         codigo: nuevoProducto.codigo.trim() || null,
         precio: Number(nuevoProducto.precio) || 0,
         precio_costo: Number(nuevoProducto.precio_costo) || 0,
-        porcentaje_ganancia: Number(nuevoProducto.porcentaje_ganancia) || 30,
+        porcentaje_ganancia: Number(nuevoProducto.porcentaje_ganancia) || 100,
         categoria_id: nuevoProducto.categoria_id ? Number(nuevoProducto.categoria_id) : null,
         stock_inicial: 0,
       })
@@ -190,7 +197,7 @@ export default function NuevaCompra() {
         codigo: '',
         precio: '',
         precio_costo: '',
-        porcentaje_ganancia: '30',
+        porcentaje_ganancia: '100',
         categoria_id: '',
       })
       await load()
@@ -485,7 +492,14 @@ export default function NuevaCompra() {
                 className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 placeholder="Venta"
                 value={nuevoProducto.precio}
-                onChange={(e) => setNuevoProducto({ ...nuevoProducto, precio: e.target.value })}
+                onChange={(e) => {
+                  const precio = e.target.value
+                  setNuevoProducto((prev) => ({
+                    ...prev,
+                    precio,
+                    porcentaje_ganancia: calcPctDesdePrecio(prev.precio_costo, precio),
+                  }))
+                }}
               />
             </div>
             <div className="flex gap-2">
