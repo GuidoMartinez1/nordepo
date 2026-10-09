@@ -89,6 +89,7 @@ export default function Reportes() {
   const [fechaHastaResumen, setFechaHastaResumen] = useState('')
 
   const [filtroMetodoPago, setFiltroMetodoPago] = useState('')
+  const [filtroTipoTarjeta, setFiltroTipoTarjeta] = useState('')
   const [filtroCuentaMp, setFiltroCuentaMp] = useState('')
   const [cuentasMp, setCuentasMp] = useState<CuentaMp[]>([])
   const [reporteActivo, setReporteActivo] = useState<'ventas' | 'compras' | 'resumen'>('ventas')
@@ -115,6 +116,7 @@ export default function Reportes() {
         setGastos(Array.isArray(gastosRes.data) ? gastosRes.data : [])
         setCuentasMp(cuentasRes.data)
         setFiltroCuentaMp('')
+        setFiltroTipoTarjeta('')
 
         const fInicio = fechaDesdeResumen || '2000-01-01'
         const fFin = fechaHastaResumen || '2099-12-31'
@@ -211,6 +213,11 @@ export default function Reportes() {
     if (filtroMetodoPago) {
       list = list.filter((v) => v.metodo_pago === filtroMetodoPago)
     }
+    if (filtroTipoTarjeta) {
+      list = list.filter(
+        (v) => v.metodo_pago === 'tarjeta' && v.tipo_tarjeta === filtroTipoTarjeta
+      )
+    }
     if (filtroCuentaMp) {
       const cuentaId = Number(filtroCuentaMp)
       list = list.filter((v) => Number(v.cuenta_mp_id) === cuentaId)
@@ -224,6 +231,11 @@ export default function Reportes() {
     if (v.metodo_pago === 'mercadopago') {
       const alias = v.cuenta_mp_alias || v.cuenta_mp_nombre
       return alias ? `MP · ${alias}` : 'mercadopago'
+    }
+    if (v.metodo_pago === 'tarjeta') {
+      if (v.tipo_tarjeta === 'credito') return 'Tarjeta · Crédito'
+      if (v.tipo_tarjeta === 'debito') return 'Tarjeta · Débito'
+      return 'Tarjeta'
     }
     return v.metodo_pago
   }
@@ -245,7 +257,8 @@ export default function Reportes() {
           Sucursal: venta.sucursal_nombre || '',
           Vendedor: venta.usuario_nombre || '',
           'Total ($)': venta.total,
-          'Método de Pago': venta.metodo_pago,
+          'Método de Pago': labelMetodo(venta),
+          'Tipo Tarjeta': venta.tipo_tarjeta || '',
           'Alias MP': venta.cuenta_mp_alias || '',
           Fecha: new Date(String(venta.fecha || '')).toLocaleDateString(),
         }
@@ -300,6 +313,7 @@ export default function Reportes() {
       setFechaDesde('')
       setFechaHasta('')
       setFiltroMetodoPago('')
+      setFiltroTipoTarjeta('')
       setFiltroCuentaMp('')
     }
   }
@@ -365,7 +379,7 @@ export default function Reportes() {
             </span>
           )}
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Desde</label>
             <input
@@ -398,6 +412,7 @@ export default function Reportes() {
                     const v = e.target.value
                     setFiltroMetodoPago(v)
                     if (v && v !== 'mercadopago') setFiltroCuentaMp('')
+                    if (v && v !== 'tarjeta') setFiltroTipoTarjeta('')
                   }}
                   className={inputFieldClass}
                 >
@@ -407,6 +422,22 @@ export default function Reportes() {
                   <option value="tarjeta">Tarjeta</option>
                 </select>
               </div>
+              {filtroMetodoPago === 'tarjeta' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Tipo tarjeta
+                  </label>
+                  <select
+                    value={filtroTipoTarjeta}
+                    onChange={(e) => setFiltroTipoTarjeta(e.target.value)}
+                    className={inputFieldClass}
+                  >
+                    <option value="">Todas</option>
+                    <option value="credito">Crédito</option>
+                    <option value="debito">Débito</option>
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Alias MP</label>
                 <select

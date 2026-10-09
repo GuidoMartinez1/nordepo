@@ -25,7 +25,11 @@ function labelPago(v: Venta) {
     const alias = v.cuenta_mp_alias || v.cuenta_mp_nombre
     return alias ? `MP · ${alias}` : 'Mercado Pago'
   }
-  if (v.metodo_pago === 'tarjeta') return 'Tarjeta'
+  if (v.metodo_pago === 'tarjeta') {
+    if (v.tipo_tarjeta === 'credito') return 'Tarjeta · Crédito'
+    if (v.tipo_tarjeta === 'debito') return 'Tarjeta · Débito'
+    return 'Tarjeta'
+  }
   if (v.metodo_pago === 'efectivo') return 'Efectivo'
   return v.metodo_pago
 }

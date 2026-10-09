@@ -139,6 +139,7 @@ export async function initDatabase() {
         fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         estado VARCHAR(50) DEFAULT 'completada',
         metodo_pago VARCHAR(50) DEFAULT 'efectivo',
+        tipo_tarjeta VARCHAR(20),
         venta_origen_id INTEGER REFERENCES ventas(id) ON DELETE SET NULL,
         notas TEXT
       )
@@ -163,6 +164,10 @@ export async function initDatabase() {
     await client.query(`
       ALTER TABLE ventas
       ADD COLUMN IF NOT EXISTS cuenta_mp_id INTEGER REFERENCES cuentas_mp(id) ON DELETE SET NULL
+    `)
+    await client.query(`
+      ALTER TABLE ventas
+      ADD COLUMN IF NOT EXISTS tipo_tarjeta VARCHAR(20)
     `)
     await client.query(`
       ALTER TABLE ventas

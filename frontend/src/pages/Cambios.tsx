@@ -231,6 +231,7 @@ export default function Cambios() {
       await api.post('/cambios', {
         sucursal_id: sucursalId,
         metodo_pago: diferencia > 0 ? metodoPago : 'efectivo',
+        tipo_tarjeta: diferencia > 0 && metodoPago === 'tarjeta' ? 'credito' : null,
         cuenta_mp_id:
           diferencia > 0 && metodoPago === 'mercadopago' ? Number(cuentaMpId) : null,
         notas,

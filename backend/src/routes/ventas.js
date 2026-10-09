@@ -85,13 +85,13 @@ router.get('/:id', async (req, res) => {
 
 /**
  * body: {
- *   sucursal_id, cliente_id?, metodo_pago?, cuenta_mp_id?, estado?, notas?,
+ *   sucursal_id, cliente_id?, metodo_pago?, tipo_tarjeta?, cuenta_mp_id?, estado?, notas?,
  *   items: [{ producto_id?, cantidad, precio_unitario, descripcion? }]
  * }
  * Items sin producto_id = importe directo (no descuenta stock).
  */
 router.post('/', async (req, res) => {
-  let { sucursal_id, cliente_id, metodo_pago, cuenta_mp_id, estado, notas, items } =
+  let { sucursal_id, cliente_id, metodo_pago, tipo_tarjeta, cuenta_mp_id, estado, notas, items } =
     req.body || {}
 
   if (req.user?.role === 'vendedor') {
@@ -107,6 +107,10 @@ router.post('/', async (req, res) => {
   }
 
   const metodo = metodo_pago || 'efectivo'
+  const tipoTarjeta =
+    metodo === 'tarjeta' && ['credito', 'debito'].includes(String(tipo_tarjeta || ''))
+      ? String(tipo_tarjeta)
+      : null
   let cuentaMpId = null
 
   const client = await pool.connect()
@@ -170,8 +174,8 @@ router.post('/', async (req, res) => {
 
     const { rows: ventaRows } = await client.query(
       `INSERT INTO ventas
-         (sucursal_id, cliente_id, total, estado, metodo_pago, cuenta_mp_id, notas, usuario_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (sucursal_id, cliente_id, total, estado, metodo_pago, tipo_tarjeta, cuenta_mp_id, notas, usuario_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         sucursal_id,
@@ -179,6 +183,7 @@ router.post('/', async (req, res) => {
         total,
         estado || 'completada',
         metodo,
+        tipoTarjeta,
         cuentaMpId,
         notas || null,
         usuarioId,

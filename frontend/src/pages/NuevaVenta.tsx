@@ -48,7 +48,8 @@ type LineaRecargo = {
 type Linea = LineaProducto | LineaDirecto | LineaRecargo
 
 const RECARGO_KEY = 'recargo-tarjeta'
-const RECARGO_DEFAULT_PCT = 15
+const RECARGO_CREDITO_PCT = 15
+const RECARGO_DEBITO_PCT = 0
 
 const METODOS_PAGO = [
   { id: 'efectivo', label: 'Efectivo', icon: Banknote },
@@ -67,10 +68,11 @@ export default function NuevaVenta() {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<number | null>(null)
   const [lineas, setLineas] = useState<Linea[]>([])
   const [metodoPago, setMetodoPago] = useState('efectivo')
+  const [tipoTarjeta, setTipoTarjeta] = useState<'credito' | 'debito'>('credito')
   const [cuentaMpId, setCuentaMpId] = useState('')
   const [importeDirecto, setImporteDirecto] = useState('')
   const [descripcionDirecta, setDescripcionDirecta] = useState('')
-  const [recargoTarjetaPct, setRecargoTarjetaPct] = useState(String(RECARGO_DEFAULT_PCT))
+  const [recargoTarjetaPct, setRecargoTarjetaPct] = useState(String(RECARGO_CREDITO_PCT))
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -144,8 +146,7 @@ export default function NuevaVenta() {
     setLineas((prev) => {
       const sinRecargo = prev.filter((l) => l.tipo !== 'recargo_tarjeta')
       const pctParsed = parseFloat(recargoTarjetaPct.replace(',', '.'))
-      const pct =
-        Number.isFinite(pctParsed) && pctParsed >= 0 ? pctParsed : RECARGO_DEFAULT_PCT
+      const pct = Number.isFinite(pctParsed) && pctParsed >= 0 ? pctParsed : 0
       const base = sinRecargo.reduce((acc, l) => {
         if (l.tipo === 'directo') return acc + l.monto
         return acc + Math.round(Number(l.producto.precio)) * l.cantidad
@@ -157,7 +158,7 @@ export default function NuevaVenta() {
         return sinRecargo.length === prev.length ? prev : sinRecargo
       }
 
-      const descripcion = `Recargo tarjeta (${pct}%)`
+      const descripcion = `Recargo tarjeta ${tipoTarjeta === 'credito' ? 'crédito' : 'débito'} (${pct}%)`
       const actual = prev.find((l): l is LineaRecargo => l.tipo === 'recargo_tarjeta')
       if (actual && actual.monto === monto && actual.descripcion === descripcion) {
         return prev
@@ -173,7 +174,7 @@ export default function NuevaVenta() {
         },
       ]
     })
-  }, [metodoPago, recargoTarjetaPct, baseSinRecargo])
+  }, [metodoPago, tipoTarjeta, recargoTarjetaPct, baseSinRecargo])
 
   if (esTodas || !sucursalId) {
     return (
@@ -292,6 +293,22 @@ export default function NuevaVenta() {
     })
   }
 
+  function seleccionarMetodoPago(metodo: string) {
+    setMetodoPago(metodo)
+    if (metodo !== 'mercadopago') setCuentaMpId('')
+    if (metodo === 'tarjeta') {
+      setTipoTarjeta('credito')
+      setRecargoTarjetaPct(String(RECARGO_CREDITO_PCT))
+    }
+  }
+
+  function seleccionarTipoTarjeta(tipo: 'credito' | 'debito') {
+    setTipoTarjeta(tipo)
+    setRecargoTarjetaPct(
+      tipo === 'credito' ? String(RECARGO_CREDITO_PCT) : String(RECARGO_DEBITO_PCT)
+    )
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (!sucursalId || lineas.length === 0) return
@@ -304,7 +321,12 @@ export default function NuevaVenta() {
       await api.post('/ventas', {
         sucursal_id: sucursalId,
         metodo_pago: metodoPago,
+        tipo_tarjeta: metodoPago === 'tarjeta' ? tipoTarjeta : null,
         cuenta_mp_id: metodoPago === 'mercadopago' ? Number(cuentaMpId) : null,
+        notas:
+          metodoPago === 'tarjeta'
+            ? `Tarjeta ${tipoTarjeta === 'credito' ? 'crédito' : 'débito'}`
+            : null,
         items: lineas.map((l) => {
           if (l.tipo === 'directo' || l.tipo === 'recargo_tarjeta') {
             return {
@@ -565,10 +587,7 @@ export default function NuevaVenta() {
                   <button
                     key={opcion.id}
                     type="button"
-                    onClick={() => {
-                      setMetodoPago(opcion.id)
-                      if (opcion.id !== 'mercadopago') setCuentaMpId('')
-                    }}
+                    onClick={() => seleccionarMetodoPago(opcion.id)}
                     className={`min-h-[58px] rounded-lg border px-2 py-2 text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 ${
                       activo
                         ? 'bg-brand-black border-brand-black text-brand-lime shadow-sm'
@@ -607,6 +626,33 @@ export default function NuevaVenta() {
           )}
           {metodoPago === 'tarjeta' && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+              <div>
+                <span className="text-sm font-medium text-amber-900">Tipo de tarjeta</span>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => seleccionarTipoTarjeta('debito')}
+                    className={`rounded-lg border px-3 py-2 text-sm font-bold transition-all ${
+                      tipoTarjeta === 'debito'
+                        ? 'bg-brand-black border-brand-black text-brand-lime'
+                        : 'bg-white border-amber-200 text-amber-900 hover:border-amber-400'
+                    }`}
+                  >
+                    Débito · 0%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => seleccionarTipoTarjeta('credito')}
+                    className={`rounded-lg border px-3 py-2 text-sm font-bold transition-all ${
+                      tipoTarjeta === 'credito'
+                        ? 'bg-brand-black border-brand-black text-brand-lime'
+                        : 'bg-white border-amber-200 text-amber-900 hover:border-amber-400'
+                    }`}
+                  >
+                    Crédito · 15%
+                  </button>
+                </div>
+              </div>
               <label className="block text-sm">
                 <span className="text-amber-900 font-medium">Recargo tarjeta (%)</span>
                 <div className="mt-1 flex items-center gap-2">

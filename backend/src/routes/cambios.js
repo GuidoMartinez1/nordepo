@@ -65,6 +65,7 @@ router.post('/', async (req, res) => {
   let {
     sucursal_id,
     metodo_pago,
+    tipo_tarjeta,
     cuenta_mp_id,
     notas,
     recargo_tarjeta,
@@ -97,6 +98,12 @@ router.post('/', async (req, res) => {
     (recargo_tarjeta?.descripcion || '').trim() || 'Recargo tarjeta'
   const total = totalEntregado - totalDevuelto + recargoTarjetaMonto
   const metodo = metodo_pago || 'efectivo'
+  const tipoTarjeta =
+    metodo === 'tarjeta' && ['credito', 'debito'].includes(String(tipo_tarjeta || ''))
+      ? String(tipo_tarjeta)
+      : metodo === 'tarjeta'
+        ? 'credito'
+        : null
   let cuentaMpId = null
 
   const client = await pool.connect()
@@ -144,10 +151,10 @@ router.post('/', async (req, res) => {
 
     const { rows: ventaRows } = await client.query(
       `INSERT INTO ventas
-         (sucursal_id, cliente_id, total, estado, metodo_pago, cuenta_mp_id, notas, usuario_id)
-       VALUES ($1, NULL, $2, 'cambio', $3, $4, $5, $6)
+         (sucursal_id, cliente_id, total, estado, metodo_pago, tipo_tarjeta, cuenta_mp_id, notas, usuario_id)
+       VALUES ($1, NULL, $2, 'cambio', $3, $4, $5, $6, $7)
        RETURNING *`,
-      [sucursal_id, total, metodo, cuentaMpId, textoNotas, usuarioId]
+      [sucursal_id, total, metodo, tipoTarjeta, cuentaMpId, textoNotas, usuarioId]
     )
     const venta = ventaRows[0]
 

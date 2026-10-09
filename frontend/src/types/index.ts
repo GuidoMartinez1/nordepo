@@ -23,6 +23,7 @@ export type Venta = {
   fecha: string
   estado: string
   metodo_pago: string
+  tipo_tarjeta?: 'credito' | 'debito' | null
   cuenta_mp_id?: number | null
   cuenta_mp_nombre?: string | null
   cuenta_mp_alias?: string | null
