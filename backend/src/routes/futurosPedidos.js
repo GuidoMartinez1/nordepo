@@ -21,7 +21,17 @@ const baseQuery = `
       SELECT SUM(ss.cantidad)::int FROM stock_sucursal ss WHERE ss.producto_id = p.id
     ), 0) AS stock_actual
   FROM futuros_pedidos fp
-  LEFT JOIN productos p ON fp.producto_id = p.id
+  LEFT JOIN LATERAL (
+    SELECT p.*
+    FROM productos p
+    WHERE p.id = fp.producto_id
+       OR (
+         fp.producto_id IS NULL
+         AND LOWER(TRIM(p.nombre)) = LOWER(TRIM(fp.producto))
+       )
+    ORDER BY CASE WHEN p.id = fp.producto_id THEN 0 ELSE 1 END, p.id
+    LIMIT 1
+  ) p ON TRUE
   LEFT JOIN categorias c ON c.id = p.categoria_id
 `
 
