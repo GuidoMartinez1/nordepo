@@ -96,11 +96,13 @@ export default function Dashboard() {
       value: String(meta?.total_productos ?? '—'),
       hint: 'catálogo',
     },
+    /*
     {
       title: 'Bajo stock',
       value: String(meta?.bajo_stock.length ?? 0),
       hint: '≤ 5 unidades',
     },
+    */
   ]
 
   return (
@@ -184,6 +186,7 @@ export default function Dashboard() {
         </Link>
       </div>
 
+      {/*
       <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-6">
         <div className="font-semibold text-sm sm:text-base mb-3">
           Stock bajo {esTodas ? '(consolidado)' : 'en esta sucursal'}
@@ -239,6 +242,7 @@ export default function Dashboard() {
           )}
         </div>
       </section>
+      */}
     </div>
   )
 }
