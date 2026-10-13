@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ClipboardList, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
@@ -34,9 +34,16 @@ type FuturoPedido = {
   cantidad: string | number | null
   precio_costo?: number | null
   stock_actual?: number | null
+  categoria_id?: number | null
+  categoria_nombre?: string | null
 }
 
-type OrdenFuturos = 'agregacion' | 'alfabetico'
+type OrdenFuturos = 'agregacion' | 'alfabetico' | 'categoria'
+
+type GrupoFuturos = {
+  categoria: string
+  items: FuturoPedido[]
+}
 
 export default function Compras() {
   const [compras, setCompras] = useState<Compra[]>([])
@@ -101,9 +108,33 @@ export default function Compras() {
           'es'
         )
       )
+    } else if (ordenFuturos === 'categoria') {
+      lista.sort((a, b) => {
+        const catA = a.categoria_nombre || 'Sin categoría'
+        const catB = b.categoria_nombre || 'Sin categoría'
+        const byCat = catA.localeCompare(catB, 'es')
+        if (byCat !== 0) return byCat
+        return (a.producto_nombre || a.producto || '').localeCompare(
+          b.producto_nombre || b.producto || '',
+          'es'
+        )
+      })
     }
     return lista
   }, [futuros, ordenFuturos])
+
+  const futurosAgrupados = useMemo<GrupoFuturos[]>(() => {
+    if (ordenFuturos !== 'categoria') {
+      return [{ categoria: '', items: futurosOrdenados }]
+    }
+
+    const grupos = new Map<string, FuturoPedido[]>()
+    for (const item of futurosOrdenados) {
+      const categoria = item.categoria_nombre || 'Sin categoría'
+      grupos.set(categoria, [...(grupos.get(categoria) ?? []), item])
+    }
+    return Array.from(grupos.entries()).map(([categoria, items]) => ({ categoria, items }))
+  }, [futurosOrdenados, ordenFuturos])
 
   const sugeridos = useMemo(() => {
     const needle = busqueda.trim().toLowerCase()
@@ -190,6 +221,7 @@ export default function Compras() {
       return {
         '#': index + 1,
         Producto: item.producto_nombre || item.producto || '',
+        Categoría: item.categoria_nombre || 'Sin categoría',
         Stock: item.stock_actual ?? '',
         Cantidad: item.cantidad ?? '',
         'Costo unitario': costo,
@@ -392,6 +424,7 @@ export default function Compras() {
                 >
                   <option value="agregacion">Orden de carga</option>
                   <option value="alfabetico">A–Z</option>
+                  <option value="categoria">Por categoría</option>
                 </select>
                 <button
                   type="button"
@@ -489,69 +522,91 @@ export default function Compras() {
                       </tr>
                     </thead>
                     <tbody>
-                      {futurosOrdenados.map((item, index) => {
-                        const cant = parseFloat(String(item.cantidad)) || 0
-                        const costo = Number(item.precio_costo) || 0
-                        const gasto = cant * costo
-                        return (
-                          <tr key={item.id} className="border-t border-slate-100">
-                            <td className="px-3 py-2 text-slate-500">{index + 1}</td>
-                            <td className="px-3 py-2 font-medium">
-                              {item.producto_nombre || item.producto}
-                            </td>
-                            <td className={`px-3 py-2 text-center ${stockClass(item.stock_actual)}`}>
-                              {item.stock_actual ?? '—'}
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                              {editandoId === item.id ? (
-                                <input
-                                  className="w-16 text-center rounded border border-slate-300 px-1 py-0.5 text-xs"
-                                  value={cantidadEditando}
-                                  onChange={(e) => setCantidadEditando(e.target.value)}
-                                />
-                              ) : (
-                                item.cantidad || '—'
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-right font-medium">
-                              {gasto > 0 ? money(gasto) : '—'}
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="flex justify-end gap-1">
-                                {editandoId === item.id ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => void guardarEdicion()}
-                                    className="text-xs font-semibold text-emerald-700 px-2"
-                                  >
-                                    OK
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    title="Editar cantidad"
-                                    onClick={() => {
-                                      setEditandoId(item.id)
-                                      setCantidadEditando(String(item.cantidad ?? ''))
-                                    }}
-                                    className="p-1 rounded text-slate-600 hover:bg-slate-100"
-                                  >
-                                    <Pencil size={14} />
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  title="Eliminar"
-                                  onClick={() => void eliminarFuturo(item.id)}
-                                  className="p-1 rounded text-rose-600 hover:bg-rose-50"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
+                      {futurosAgrupados.map((grupo) => (
+                        <Fragment key={grupo.categoria || 'todos'}>
+                          {ordenFuturos === 'categoria' && (
+                            <tr key={`cat-${grupo.categoria}`} className="border-t border-slate-200">
+                              <td
+                                colSpan={6}
+                                className="bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-600"
+                              >
+                                {grupo.categoria} · {grupo.items.length}
+                              </td>
+                            </tr>
+                          )}
+                          {grupo.items.map((item, index) => {
+                            const globalIndex = futurosOrdenados.findIndex((fp) => fp.id === item.id)
+                            const cant = parseFloat(String(item.cantidad)) || 0
+                            const costo = Number(item.precio_costo) || 0
+                            const gasto = cant * costo
+                            return (
+                              <tr key={item.id} className="border-t border-slate-100">
+                                <td className="px-3 py-2 text-slate-500">
+                                  {ordenFuturos === 'categoria' ? index + 1 : globalIndex + 1}
+                                </td>
+                                <td className="px-3 py-2 font-medium">
+                                  <span>{item.producto_nombre || item.producto}</span>
+                                  {ordenFuturos !== 'categoria' && (
+                                    <span className="block text-[11px] font-normal text-slate-400">
+                                      {item.categoria_nombre || 'Sin categoría'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className={`px-3 py-2 text-center ${stockClass(item.stock_actual)}`}>
+                                  {item.stock_actual ?? '—'}
+                                </td>
+                                <td className="px-3 py-2 text-center">
+                                  {editandoId === item.id ? (
+                                    <input
+                                      className="w-16 text-center rounded border border-slate-300 px-1 py-0.5 text-xs"
+                                      value={cantidadEditando}
+                                      onChange={(e) => setCantidadEditando(e.target.value)}
+                                    />
+                                  ) : (
+                                    item.cantidad || '—'
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-right font-medium">
+                                  {gasto > 0 ? money(gasto) : '—'}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex justify-end gap-1">
+                                    {editandoId === item.id ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void guardarEdicion()}
+                                        className="text-xs font-semibold text-emerald-700 px-2"
+                                      >
+                                        OK
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        title="Editar cantidad"
+                                        onClick={() => {
+                                          setEditandoId(item.id)
+                                          setCantidadEditando(String(item.cantidad ?? ''))
+                                        }}
+                                        className="p-1 rounded text-slate-600 hover:bg-slate-100"
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      title="Eliminar"
+                                      onClick={() => void eliminarFuturo(item.id)}
+                                      className="p-1 rounded text-rose-600 hover:bg-rose-50"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </Fragment>
+                      ))}
                     </tbody>
                   </table>
                 </div>

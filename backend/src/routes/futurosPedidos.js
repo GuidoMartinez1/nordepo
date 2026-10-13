@@ -14,12 +14,15 @@ const baseQuery = `
     fp.creado_en,
     fp.producto_id,
     COALESCE(p.nombre, fp.producto) AS producto_nombre,
+    p.categoria_id,
+    c.nombre AS categoria_nombre,
     p.precio_costo,
     COALESCE((
       SELECT SUM(ss.cantidad)::int FROM stock_sucursal ss WHERE ss.producto_id = p.id
     ), 0) AS stock_actual
   FROM futuros_pedidos fp
   LEFT JOIN productos p ON fp.producto_id = p.id
+  LEFT JOIN categorias c ON c.id = p.categoria_id
 `
 
 router.get('/', async (_req, res) => {
