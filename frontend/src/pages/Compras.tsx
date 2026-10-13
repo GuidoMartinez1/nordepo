@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ClipboardList, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { ClipboardList, Eye, MessageCircle, Pencil, Plus, Trash2, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import api from '../services/api'
 import { money } from '../utils/money'
@@ -47,6 +47,10 @@ type GrupoFuturos = {
 
 function normalizarNombreProducto(value?: string | null) {
   return (value || '').trim().toLowerCase()
+}
+
+function telefonoWhatsappConfigurado() {
+  return String(import.meta.env.VITE_FUTUROS_PEDIDOS_WHATSAPP || '').replace(/\D/g, '')
 }
 
 export default function Compras() {
@@ -263,6 +267,60 @@ export default function Compras() {
     XLSX.writeFile(workbook, 'futuros_pedidos.xlsx')
   }
 
+  function enviarFuturosWhatsapp(incluirCostos: boolean) {
+    const telefono = telefonoWhatsappConfigurado()
+    if (!telefono) {
+      toast.error('Falta configurar el WhatsApp de futuros pedidos')
+      return
+    }
+    if (!futurosConCategoria.length) {
+      toast.error('No hay futuros pedidos para enviar')
+      return
+    }
+
+    const ordenadosPorCategoria = [...futurosConCategoria].sort((a, b) => {
+      const catA = a.categoria_nombre || 'Sin categoría'
+      const catB = b.categoria_nombre || 'Sin categoría'
+      const byCat = catA.localeCompare(catB, 'es')
+      if (byCat !== 0) return byCat
+      return (a.producto_nombre || a.producto || '').localeCompare(
+        b.producto_nombre || b.producto || '',
+        'es'
+      )
+    })
+
+    const grupos = new Map<string, FuturoPedido[]>()
+    for (const item of ordenadosPorCategoria) {
+      const categoria = item.categoria_nombre || 'Sin categoría'
+      grupos.set(categoria, [...(grupos.get(categoria) ?? []), item])
+    }
+
+    const fecha = new Date().toLocaleDateString('es-AR')
+    const lineas = [
+      `Futuros pedidos ${incluirCostos ? 'con costos' : 'sin costos'} - ${fecha}`,
+      '',
+      ...Array.from(grupos.entries()).flatMap(([categoria, items]) => [
+        `*${categoria}*`,
+        ...items.map((item) => {
+          const producto = item.producto_nombre || item.producto || 'Producto'
+          const cantidad = item.cantidad || '—'
+          if (!incluirCostos) return `- ${producto} | Cant: ${cantidad}`
+          const cant = parseFloat(String(item.cantidad)) || 0
+          const costo = Number(item.precio_costo) || 0
+          const gasto = cant * costo
+          const costoTexto = costo > 0 ? ` | Costo: ${money(costo)}` : ''
+          const gastoTexto = gasto > 0 ? ` | Total: ${money(gasto)}` : ''
+          return `- ${producto} | Cant: ${cantidad}${costoTexto}${gastoTexto}`
+        }),
+        '',
+      ]),
+      incluirCostos && totalEstimado > 0 ? `Gasto estimado: ${money(totalEstimado)}` : '',
+    ].filter((linea, index, arr) => linea || arr[index - 1] !== '')
+
+    const mensaje = encodeURIComponent(lineas.join('\n').trim())
+    window.open(`https://wa.me/${telefono}?text=${mensaje}`, '_blank', 'noopener,noreferrer')
+  }
+
   function stockClass(stock: number | null | undefined) {
     const n = Number(stock) || 0
     if (n <= 0) return 'text-rose-600 font-semibold'
@@ -461,6 +519,20 @@ export default function Compras() {
                   className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs font-semibold"
                 >
                   Exportar Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => enviarFuturosWhatsapp(false)}
+                  className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-semibold inline-flex items-center gap-1.5"
+                >
+                  <MessageCircle size={14} /> WhatsApp sin costo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => enviarFuturosWhatsapp(true)}
+                  className="px-3 py-1.5 bg-green-700 text-white rounded-lg hover:bg-green-800 text-xs font-semibold inline-flex items-center gap-1.5"
+                >
+                  <MessageCircle size={14} /> WhatsApp con costo
                 </button>
                 <button
                   type="button"
