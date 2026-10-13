@@ -45,6 +45,10 @@ type GrupoFuturos = {
   items: FuturoPedido[]
 }
 
+function normalizarNombreProducto(value?: string | null) {
+  return (value || '').trim().toLowerCase()
+}
+
 export default function Compras() {
   const [compras, setCompras] = useState<Compra[]>([])
   const [detalle, setDetalle] = useState<CompraDetalle | null>(null)
@@ -99,8 +103,33 @@ export default function Compras() {
     if (mostrarFuturos) void loadFuturos()
   }, [mostrarFuturos])
 
+  const futurosConCategoria = useMemo(() => {
+    const productosPorId = new Map(productos.map((p) => [p.id, p]))
+    const productosPorNombre = new Map(
+      productos.map((p) => [normalizarNombreProducto(p.nombre), p])
+    )
+
+    return futuros.map((item) => {
+      const producto =
+        (item.producto_id ? productosPorId.get(Number(item.producto_id)) : undefined) ||
+        productosPorNombre.get(normalizarNombreProducto(item.producto_nombre || item.producto))
+
+      if (!producto) return item
+
+      return {
+        ...item,
+        producto_id: item.producto_id ?? producto.id,
+        producto_nombre: item.producto_nombre || producto.nombre,
+        categoria_id: item.categoria_id ?? producto.categoria_id ?? null,
+        categoria_nombre: item.categoria_nombre || producto.categoria_nombre || null,
+        precio_costo: item.precio_costo ?? producto.precio_costo ?? null,
+        stock_actual: item.stock_actual ?? producto.stock_total ?? producto.stock ?? null,
+      }
+    })
+  }, [futuros, productos])
+
   const futurosOrdenados = useMemo(() => {
-    const lista = [...futuros]
+    const lista = [...futurosConCategoria]
     if (ordenFuturos === 'alfabetico') {
       lista.sort((a, b) =>
         (a.producto_nombre || a.producto || '').localeCompare(
@@ -121,7 +150,7 @@ export default function Compras() {
       })
     }
     return lista
-  }, [futuros, ordenFuturos])
+  }, [futurosConCategoria, ordenFuturos])
 
   const futurosAgrupados = useMemo<GrupoFuturos[]>(() => {
     if (ordenFuturos !== 'categoria') {
@@ -144,7 +173,7 @@ export default function Compras() {
       .slice(0, 8)
   }, [productos, busqueda])
 
-  const totalEstimado = futuros.reduce((acc, item) => {
+  const totalEstimado = futurosConCategoria.reduce((acc, item) => {
     const cant = parseFloat(String(item.cantidad)) || 0
     const costo = Number(item.precio_costo) || 0
     return acc + cant * costo
