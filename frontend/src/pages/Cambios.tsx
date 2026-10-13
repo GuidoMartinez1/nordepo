@@ -310,14 +310,14 @@ export default function Cambios() {
                     <Minus size={14} />
                   </button>
                   <input
-                  type="number"
-                  min={1}
-                  max={
-                    esDevolucion || l.tipo === 'directo'
-                      ? undefined
-                      : l.producto?.stock ?? undefined
-                  }
-                  value={l.cantidad}
+                    type="number"
+                    min={1}
+                    max={
+                      esDevolucion || l.tipo === 'directo'
+                        ? undefined
+                        : l.producto?.stock ?? undefined
+                    }
+                    value={l.cantidad}
                     onChange={(e) => setCantidad(tipo, l.key, Math.round(Number(e.target.value)))}
                     className="w-14 h-8 text-center rounded-lg border border-slate-300 text-sm font-semibold"
                   />
@@ -329,14 +329,14 @@ export default function Cambios() {
                     <Plus size={14} />
                   </button>
                 </div>
-                <label className="flex items-center gap-1 text-xs text-slate-500 ml-auto">
+                <label className="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-2 text-xs text-slate-500 sm:ml-auto">
                   $/u
                   <input
                     type="text"
                     inputMode="numeric"
                     value={l.precioUnitario}
                     onChange={(e) => setPrecioUnitario(tipo, l.key, e.target.value)}
-                    className="w-24 h-8 rounded-lg border border-slate-300 px-2 text-right text-sm font-semibold text-brand-black"
+                    className="w-28 sm:w-24 h-8 rounded-lg border border-slate-300 px-2 text-right text-sm font-semibold text-brand-black"
                   />
                 </label>
               </div>
@@ -356,7 +356,7 @@ export default function Cambios() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <form onSubmit={onSubmit} className="max-w-full overflow-x-hidden space-y-5 sm:space-y-6 pb-28 sm:pb-0">
       <div>
         <h2 className="page-title">Cambios</h2>
         <p className="text-slate-500 text-sm">
@@ -364,24 +364,29 @@ export default function Cambios() {
         </p>
       </div>
 
-      <div className="grid xl:grid-cols-[1fr_1.35fr] gap-6">
-        <div className="space-y-3">
+      <div className="grid xl:grid-cols-[1fr_1.35fr] gap-5 sm:gap-6 min-w-0">
+        <div className="space-y-3 min-w-0">
           <input
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
             placeholder="Buscar producto..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 max-h-[620px] overflow-auto">
+          <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 max-h-[55vh] sm:max-h-[620px] overflow-auto">
             {productosVisibles.map((p) => (
-              <div key={p.id} className="p-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-medium text-sm truncate">{p.nombre}</p>
+              <div
+                key={p.id}
+                className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+              >
+                <div className="min-w-0 w-full">
+                  <p className="font-medium text-sm leading-snug break-words sm:truncate">
+                    {p.nombre}
+                  </p>
                   <p className="text-xs text-slate-500">
                     Stock {p.stock ?? 0} · {money(p.precio)}
                   </p>
                 </div>
-                <div className="flex gap-1 shrink-0">
+                <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:gap-1 sm:shrink-0">
                   <button
                     type="button"
                     onClick={() => addLinea('devolucion', p)}
@@ -402,7 +407,7 @@ export default function Cambios() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           <div className="grid md:grid-cols-2 gap-4">
             <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
               <div className="flex items-center justify-between gap-2 mb-3">
