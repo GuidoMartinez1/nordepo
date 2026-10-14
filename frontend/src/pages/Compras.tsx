@@ -496,16 +496,16 @@ export default function Compras() {
       {mostrarFuturos && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="w-full max-w-3xl bg-white rounded-2xl shadow-xl max-h-[90vh] flex flex-col">
-            <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4 border-b border-slate-100">
-              <div>
+            <div className="flex flex-col gap-3 px-5 py-4 border-b border-slate-100 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <h3 className="font-display text-2xl">Futuros pedidos</h3>
                 <p className="text-xs text-slate-500">
                   Lista de reposición. Se suma al vender y se consume al comprar.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
                 <select
-                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+                  className="col-span-2 rounded-lg border border-slate-300 px-2 py-2 text-xs sm:col-span-1 sm:py-1.5"
                   value={ordenFuturos}
                   onChange={(e) => setOrdenFuturos(e.target.value as OrdenFuturos)}
                 >
@@ -516,28 +516,28 @@ export default function Compras() {
                 <button
                   type="button"
                   onClick={exportarFuturosExcel}
-                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs font-semibold"
+                  className="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs font-semibold sm:py-1.5"
                 >
                   Exportar Excel
                 </button>
                 <button
                   type="button"
                   onClick={() => enviarFuturosWhatsapp(false)}
-                  className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-semibold inline-flex items-center gap-1.5"
+                  className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 sm:py-1.5"
                 >
                   <MessageCircle size={14} /> WhatsApp sin costo
                 </button>
                 <button
                   type="button"
                   onClick={() => enviarFuturosWhatsapp(true)}
-                  className="px-3 py-1.5 bg-green-700 text-white rounded-lg hover:bg-green-800 text-xs font-semibold inline-flex items-center gap-1.5"
+                  className="px-3 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 text-xs font-semibold inline-flex items-center justify-center gap-1.5 sm:py-1.5"
                 >
                   <MessageCircle size={14} /> WhatsApp con costo
                 </button>
                 <button
                   type="button"
                   onClick={() => setMostrarFuturos(false)}
-                  className="p-1 rounded hover:bg-slate-100"
+                  className="absolute right-3 top-3 rounded p-1 hover:bg-slate-100 sm:static"
                 >
                   <X size={18} />
                 </button>
