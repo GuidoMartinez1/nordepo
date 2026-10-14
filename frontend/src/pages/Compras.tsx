@@ -537,9 +537,10 @@ export default function Compras() {
                 <button
                   type="button"
                   onClick={() => setMostrarFuturos(false)}
-                  className="absolute right-3 top-3 rounded p-1 hover:bg-slate-100 sm:static"
+                  aria-label="Cerrar futuros pedidos"
+                  className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 sm:static sm:h-auto sm:w-auto sm:rounded sm:border-0 sm:bg-transparent sm:p-1 sm:shadow-none"
                 >
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
             </div>
