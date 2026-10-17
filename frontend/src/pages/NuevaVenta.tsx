@@ -506,10 +506,10 @@ export default function NuevaVenta() {
             {lineas.map((l) => (
               <li
                 key={l.key}
-                className={`border rounded-lg p-2.5 space-y-2 ${
+                className={`border rounded-xl p-3 sm:p-4 space-y-3 ${
                   l.tipo === 'recargo_tarjeta'
                     ? 'border-amber-200 bg-amber-50/80'
-                    : 'border-slate-100'
+                    : 'border-slate-200'
                 }`}
               >
                 <div className="flex justify-between items-start gap-2">
@@ -526,11 +526,36 @@ export default function NuevaVenta() {
                       </>
                     ) : (
                       <>
-                        <span className="font-medium block truncate text-sm">{l.producto.nombre}</span>
-                        <label className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          Precio unitario ($)
+                        <span className="font-semibold block text-sm leading-snug break-words">{l.producto.nombre}</span>
+                        <span className="mt-1 block text-xs text-slate-500">
+                          Stock disponible: {l.producto.stock ?? 0}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  {l.tipo !== 'recargo_tarjeta' && (
+                    <button
+                      type="button"
+                      onClick={() => removeLinea(l.key)}
+                      className="h-11 w-11 rounded-xl text-rose-600 bg-rose-50 hover:bg-rose-100 flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                      aria-label={`Quitar ${l.tipo === 'producto' ? l.producto.nombre : l.descripcion}`}
+                      title="Quitar"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+
+                {l.tipo === 'producto' ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-3">
+                      <label className="block min-w-0">
+                        <span className="mb-1.5 block text-xs font-medium text-slate-500">Precio unitario</span>
+                        <div className="flex h-12 items-center rounded-xl border border-slate-300 bg-white px-3 focus-within:border-brand-black focus-within:ring-2 focus-within:ring-brand-lime/50">
+                          <span className="mr-2 text-slate-400" aria-hidden="true">$</span>
                           <input
                             type="number"
+                            inputMode="numeric"
                             min="0"
                             step="1"
                             required
@@ -547,59 +572,55 @@ export default function NuevaVenta() {
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') e.preventDefault()
                             }}
-                            className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm text-slate-900 bg-white"
+                            className="w-full min-w-0 bg-transparent text-base font-semibold tabular-nums text-brand-black outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                           />
-                        </label>
-                      </>
-                    )}
-                  </div>
-                  {l.tipo !== 'recargo_tarjeta' && (
-                    <button
-                      type="button"
-                      onClick={() => removeLinea(l.key)}
-                      className="p-1 rounded text-rose-600 hover:bg-rose-50 shrink-0"
-                      title="Quitar"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-
-                {l.tipo === 'producto' ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setCantidadProducto(l.key, l.cantidad - 1)}
-                        className="h-8 w-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-brand-black"
-                        title="Restar"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <input
-                        type="number"
-                        min={1}
-                        max={l.producto.stock ?? undefined}
-                        value={l.cantidad}
-                        onChange={(e) => {
-                          const n = Math.round(Number(e.target.value))
-                          if (!Number.isFinite(n)) return
-                          setCantidadProducto(l.key, n)
-                        }}
-                        className="w-14 h-8 text-center rounded-lg border border-slate-300 text-sm font-semibold bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setCantidadProducto(l.key, l.cantidad + 1)}
-                        className="h-8 w-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-brand-black"
-                        title="Sumar"
-                      >
-                        <Plus size={14} />
-                      </button>
+                        </div>
+                      </label>
+                      <div className="min-w-0">
+                        <label htmlFor={`cantidad-${l.key}`} className="mb-1.5 block text-xs font-medium text-slate-500">Cantidad</label>
+                        <div className="flex h-12 items-center overflow-hidden rounded-xl border border-slate-300 bg-slate-50 focus-within:border-brand-black focus-within:ring-2 focus-within:ring-brand-lime/50">
+                          <button
+                            type="button"
+                            onClick={() => setCantidadProducto(l.key, l.cantidad - 1)}
+                            className="h-full w-11 shrink-0 hover:bg-slate-200 active:bg-slate-300 flex items-center justify-center text-brand-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-black"
+                            aria-label={`Restar una unidad de ${l.producto.nombre}`}
+                          >
+                            <Minus size={18} />
+                          </button>
+                          <input
+                            id={`cantidad-${l.key}`}
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={l.producto.stock ?? undefined}
+                            value={l.cantidad}
+                            onChange={(e) => {
+                              const n = Math.round(Number(e.target.value))
+                              if (!Number.isFinite(n)) return
+                              setCantidadProducto(l.key, n)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') e.preventDefault()
+                            }}
+                            className="w-full min-w-0 h-full text-center border-x border-slate-200 text-base font-semibold tabular-nums bg-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setCantidadProducto(l.key, l.cantidad + 1)}
+                            className="h-full w-11 shrink-0 bg-brand-lime/20 hover:bg-brand-lime/40 active:bg-brand-lime/60 flex items-center justify-center text-brand-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-black"
+                            aria-label={`Sumar una unidad de ${l.producto.nombre}`}
+                          >
+                            <Plus size={18} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <span className="font-semibold text-sm tabular-nums">
-                      {money(Math.round(Number(l.precioUnitario)) * l.cantidad)}
-                    </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                      <span className="text-xs font-medium text-slate-500">Subtotal</span>
+                      <span className="font-bold text-base tabular-nums text-brand-black">
+                        {money(Math.round(Number(l.precioUnitario)) * l.cantidad)}
+                      </span>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex justify-end">
