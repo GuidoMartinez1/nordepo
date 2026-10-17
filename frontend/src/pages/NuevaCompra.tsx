@@ -15,7 +15,8 @@ type CartItem = {
   producto_id: number
   producto_nombre: string
   cantidad: number
-  precio_unitario: number
+  cantidadTexto?: string
+  precio_unitario: string
   subtotal: number
 }
 
@@ -84,7 +85,7 @@ export default function NuevaCompra() {
         const cantidad = existing.cantidad + 1
         return prev.map((i) =>
           i.producto_id === producto.id
-            ? { ...i, cantidad, subtotal: cantidad * i.precio_unitario }
+            ? { ...i, cantidad, cantidadTexto: String(cantidad), subtotal: cantidad * Number(i.precio_unitario) }
             : i
         )
       }
@@ -94,7 +95,7 @@ export default function NuevaCompra() {
           producto_id: producto.id,
           producto_nombre: producto.nombre,
           cantidad: 1,
-          precio_unitario: precio,
+          precio_unitario: String(precio),
           subtotal: precio,
         },
         ...prev,
@@ -110,18 +111,28 @@ export default function NuevaCompra() {
     setCart((prev) =>
       prev.map((i) =>
         i.producto_id === productoId
-          ? { ...i, cantidad, subtotal: cantidad * i.precio_unitario }
+          ? { ...i, cantidad, cantidadTexto: String(cantidad), subtotal: cantidad * Number(i.precio_unitario) }
           : i
       )
     )
   }
 
-  function updatePrecio(productoId: number, precio: number) {
-    const precio_unitario = Math.max(0, precio)
+  function editQuantity(productoId: number, value: string) {
+    if (!/^\d*$/.test(value) || !Number.isSafeInteger(Number(value))) return
+    const cantidad = Number(value)
+    setCart((prev) => prev.map((i) => i.producto_id === productoId
+      ? { ...i, cantidad, cantidadTexto: value, subtotal: cantidad * Number(i.precio_unitario) }
+      : i))
+  }
+
+  function updatePrecio(productoId: number, precio: string) {
+    const precio_unitario = precio.replace(',', '.')
+    if (!/^\d*(\.\d*)?$/.test(precio_unitario)) return
+    if (!Number.isFinite(Number(precio_unitario))) return
     setCart((prev) =>
       prev.map((i) =>
         i.producto_id === productoId
-          ? { ...i, precio_unitario, subtotal: i.cantidad * precio_unitario }
+          ? { ...i, precio_unitario, subtotal: i.cantidad * Number(precio_unitario) }
           : i
       )
     )
@@ -141,6 +152,14 @@ export default function NuevaCompra() {
       toast.error('Agregá al menos un producto')
       return
     }
+    if (cart.some((i) => i.precio_unitario.trim() === '' || !Number.isFinite(Number(i.precio_unitario)) || Number(i.precio_unitario) < 0)) {
+      toast.error('Ingresá un costo unitario válido para cada producto')
+      return
+    }
+    if (cart.some((i) => !Number.isSafeInteger(i.cantidad) || i.cantidad <= 0)) {
+      toast.error('Ingresá una cantidad entera mayor que cero para cada producto')
+      return
+    }
     setSaving(true)
     try {
       await api.post('/compras', {
@@ -149,7 +168,7 @@ export default function NuevaCompra() {
         items: cart.map((i) => ({
           producto_id: i.producto_id,
           cantidad: i.cantidad,
-          precio_unitario: i.precio_unitario,
+          precio_unitario: Number(i.precio_unitario),
         })),
       })
       const destNombre =
@@ -332,7 +351,7 @@ export default function NuevaCompra() {
           ) : (
             <ul className="space-y-3 max-h-[420px] overflow-y-auto">
               {cart.map((item) => (
-                <li key={item.producto_id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <li key={item.producto_id} className="rounded-xl border border-lime-200 bg-lime-50/40 p-3">
                   <div className="flex justify-between gap-2 mb-2">
                     <p className="text-sm font-medium leading-snug">{item.producto_nombre}</p>
                     <button
@@ -343,50 +362,57 @@ export default function NuevaCompra() {
                       <Trash2 size={16} />
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-[112px_minmax(0,160px)] justify-between gap-3 text-xs">
                     <div>
-                      <span className="text-slate-500 block mb-1">Cantidad</span>
-                      <div className="flex items-center gap-1">
+                      <span className="text-slate-600 font-medium block mb-1 text-center">Cantidad</span>
+                      <div className="flex items-center justify-center gap-1">
                         <button
                           type="button"
-                          className="w-7 h-7 rounded-full bg-white border border-slate-300 grid place-items-center"
+                          className="w-7 h-7 shrink-0 rounded-lg bg-white border border-lime-300 text-lime-800 hover:bg-lime-100 grid place-items-center"
                           onClick={() => updateQuantity(item.producto_id, item.cantidad - 1)}
                         >
                           <Minus size={12} />
                         </button>
                         <input
-                          type="number"
-                          min={1}
+                          type="text"
+                          inputMode="numeric"
+                          aria-label={`Cantidad de ${item.producto_nombre}`}
                           className="w-12 text-center rounded border border-slate-300 py-1"
-                          value={item.cantidad}
-                          onChange={(e) =>
-                            updateQuantity(item.producto_id, Number(e.target.value) || 1)
-                          }
+                          value={item.cantidadTexto ?? String(item.cantidad)}
+                          onChange={(e) => editQuantity(item.producto_id, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.preventDefault()
+                          }}
                         />
                         <button
                           type="button"
-                          className="w-7 h-7 rounded-full bg-white border border-slate-300 grid place-items-center"
+                          className="w-7 h-7 shrink-0 rounded-lg bg-white border border-lime-300 text-lime-800 hover:bg-lime-100 grid place-items-center"
                           onClick={() => updateQuantity(item.producto_id, item.cantidad + 1)}
                         >
                           <Plus size={12} />
                         </button>
                       </div>
                     </div>
-                    <div>
-                      <span className="text-slate-500 block mb-1">Costo unit.</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min={0}
-                        className="w-full rounded border border-slate-300 px-2 py-1"
-                        value={item.precio_unitario}
-                        onChange={(e) =>
-                          updatePrecio(item.producto_id, Number(e.target.value) || 0)
-                        }
-                      />
-                    </div>
+                    <label className="block min-w-0">
+                      <span className="text-slate-600 font-medium block mb-1 text-center">Costo unit.</span>
+                      <div className="relative flex items-center h-7 rounded-lg border border-lime-300 bg-white focus-within:border-lime-600 focus-within:ring-1 focus-within:ring-lime-600">
+                        <span className="absolute left-2 text-lime-700 pointer-events-none" aria-hidden="true">$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          required
+                          aria-label={`Costo unitario de ${item.producto_nombre}`}
+                          className="w-full min-w-0 bg-transparent pl-5 pr-2 text-base font-semibold tabular-nums outline-none"
+                          value={item.precio_unitario}
+                          onChange={(e) => updatePrecio(item.producto_id, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.preventDefault()
+                          }}
+                        />
+                      </div>
+                    </label>
                   </div>
-                  <p className="text-right text-sm font-semibold mt-2">{money(item.subtotal)}</p>
+                  <p className="text-right text-sm font-bold text-green-600 tabular-nums mt-2">{money(item.subtotal)}</p>
                 </li>
               ))}
             </ul>
