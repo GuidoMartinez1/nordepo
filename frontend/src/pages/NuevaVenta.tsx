@@ -29,6 +29,7 @@ type LineaProducto = {
   key: string
   producto: Producto
   cantidad: number
+  precioUnitario: string
 }
 
 type LineaDirecto = {
@@ -129,7 +130,7 @@ export default function NuevaVenta() {
 
   const total = lineas.reduce((acc, l) => {
     if (l.tipo === 'directo' || l.tipo === 'recargo_tarjeta') return acc + l.monto
-    return acc + Math.round(Number(l.producto.precio)) * l.cantidad
+    return acc + Math.round(Number(l.precioUnitario)) * l.cantidad
   }, 0)
 
   const baseSinRecargo = useMemo(
@@ -137,7 +138,7 @@ export default function NuevaVenta() {
       lineas.reduce((acc, l) => {
         if (l.tipo === 'recargo_tarjeta') return acc
         if (l.tipo === 'directo') return acc + l.monto
-        return acc + Math.round(Number(l.producto.precio)) * l.cantidad
+        return acc + Math.round(Number(l.precioUnitario)) * l.cantidad
       }, 0),
     [lineas]
   )
@@ -149,7 +150,7 @@ export default function NuevaVenta() {
       const pct = Number.isFinite(pctParsed) && pctParsed >= 0 ? pctParsed : 0
       const base = sinRecargo.reduce((acc, l) => {
         if (l.tipo === 'directo') return acc + l.monto
-        return acc + Math.round(Number(l.producto.precio)) * l.cantidad
+        return acc + Math.round(Number(l.precioUnitario)) * l.cantidad
       }, 0)
       const monto = Math.round((base * pct) / 100)
       const debeTener = metodoPago === 'tarjeta' && sinRecargo.length > 0 && monto > 0
@@ -249,7 +250,13 @@ export default function NuevaVenta() {
       }
       return [
         ...prev,
-        { tipo: 'producto', key: `p-${p.id}`, producto: p, cantidad: 1 },
+        {
+          tipo: 'producto',
+          key: `p-${p.id}`,
+          producto: p,
+          cantidad: 1,
+          precioUnitario: String(Math.round(Number(p.precio))),
+        },
       ]
     })
   }
@@ -316,6 +323,11 @@ export default function NuevaVenta() {
       toast.error('Elegí a qué alias se transfiere')
       return
     }
+    if (lineas.some((l) => l.tipo === 'producto' &&
+      (l.precioUnitario.trim() === '' || !Number.isFinite(Number(l.precioUnitario)) || Number(l.precioUnitario) < 0))) {
+      toast.error('Ingresá un precio válido para cada producto')
+      return
+    }
     setSaving(true)
     try {
       await api.post('/ventas', {
@@ -338,7 +350,7 @@ export default function NuevaVenta() {
           return {
             producto_id: l.producto.id,
             cantidad: l.cantidad,
-            precio_unitario: Math.round(Number(l.producto.precio)),
+            precio_unitario: Math.round(Number(l.precioUnitario)),
           }
         }),
       })
@@ -515,9 +527,29 @@ export default function NuevaVenta() {
                     ) : (
                       <>
                         <span className="font-medium block truncate text-sm">{l.producto.nombre}</span>
-                        <span className="text-xs text-slate-500">
-                          {money(Math.round(Number(l.producto.precio)))} c/u
-                        </span>
+                        <label className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          Precio unitario ($)
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            required
+                            aria-label={`Precio unitario de ${l.producto.nombre}`}
+                            value={l.precioUnitario}
+                            onChange={(e) => {
+                              const precioUnitario = e.target.value
+                              setLineas((prev) => prev.map((linea) =>
+                                linea.key === l.key && linea.tipo === 'producto'
+                                  ? { ...linea, precioUnitario }
+                                  : linea
+                              ))
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') e.preventDefault()
+                            }}
+                            className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm text-slate-900 bg-white"
+                          />
+                        </label>
                       </>
                     )}
                   </div>
@@ -566,7 +598,7 @@ export default function NuevaVenta() {
                       </button>
                     </div>
                     <span className="font-semibold text-sm tabular-nums">
-                      {money(Math.round(Number(l.producto.precio)) * l.cantidad)}
+                      {money(Math.round(Number(l.precioUnitario)) * l.cantidad)}
                     </span>
                   </div>
                 ) : (
