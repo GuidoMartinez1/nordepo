@@ -9,12 +9,15 @@ import {
   MapPin,
   Minus,
   Plus,
+  RefreshCw,
   Smartphone,
   Store,
   Trash2,
   Trophy,
 } from 'lucide-react'
 import api from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
+import { catalogoScope, leerCatalogo, guardarCatalogo, productosParaVenta, descontarStockCatalogo } from '../services/catalogoCache'
 import { useSucursal } from '../contexts/SucursalContext'
 import { money } from '../utils/money'
 import { getCategoryIcon } from '../utils/categoryIcons'
@@ -60,7 +63,14 @@ const METODOS_PAGO = [
 
 export default function NuevaVenta() {
   const { sucursalId, sucursal, esTodas, sucursales, setSucursalId } = useSucursal()
+  const { user } = useAuth()
   const navigate = useNavigate()
+  const [actualizado, setActualizado] = useState<number | null>(null)
+  const [actualizando, setActualizando] = useState(false)
+  const [errorCatalogo, setErrorCatalogo] = useState(false)
+  const [revisionCatalogo, setRevisionCatalogo] = useState(0)
+  const catalogoRequest = useRef<AbortController | null>(null)
+  const scope = user && sucursalId ? catalogoScope(user.id, user.role, sucursalId) : null
   const montoRef = useRef<HTMLInputElement>(null)
   const [productos, setProductos] = useState<Producto[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
@@ -77,24 +87,66 @@ export default function NuevaVenta() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (!sucursalId) return
-    api
-      .get<Producto[]>('/productos', { params: { sucursal_id: sucursalId } })
-      .then((res) => setProductos(res.data))
-      .catch(() => toast.error('Error al cargar productos'))
-    api
-      .get<Categoria[]>('/categorias')
-      .then((res) => setCategorias(res.data))
-      .catch(() => setCategorias([]))
-    api
-      .get<CuentaMp[]>('/cuentas-mp', { params: { sucursal_id: sucursalId } })
-      .then((res) => setCuentasMp(res.data))
-      .catch(() => setCuentasMp([]))
     setCuentaMpId('')
     setLineas([])
     setCategoriaSeleccionada(null)
     setQ('')
-  }, [sucursalId])
+    if (!scope) {
+      setProductos([])
+      setCategorias([])
+      setCuentasMp([])
+      setActualizado(null)
+      return
+    }
+    const productosGuardados = leerCatalogo<Producto>(scope, 'productos')
+    const categoriasGuardadas = leerCatalogo<Categoria>(scope, 'categorias')
+    const cuentasGuardadas = leerCatalogo<CuentaMp>(scope, 'cuentas-mp')
+    setProductos(productosGuardados?.datos ?? [])
+    setCategorias(categoriasGuardadas?.datos ?? [])
+    setCuentasMp(cuentasGuardadas?.datos ?? [])
+    setActualizado(productosGuardados?.actualizado ?? null)
+  }, [scope])
+
+  useEffect(() => {
+    if (!scope || !sucursalId) return
+    const controller = new AbortController()
+    catalogoRequest.current = controller
+    setActualizando(true)
+    setErrorCatalogo(false)
+    const options = { params: { sucursal_id: sucursalId }, signal: controller.signal, timeout: 20000 }
+    const requests = [
+      api.get<Producto[]>('/productos', options).then(({ data }) => {
+        if (controller.signal.aborted) return
+        const datos = productosParaVenta(data, sucursalId)
+        const fecha = Date.now()
+        guardarCatalogo(scope, 'productos', datos, fecha)
+        setProductos(datos)
+        // Actualizar disponibilidad sin cambiar precios acordados ni cantidades del ticket.
+        setLineas((prev) => prev.map((linea) => {
+          if (linea.tipo !== 'producto') return linea
+          const producto = datos.find((p) => p.id === linea.producto.id)
+          return { ...linea, producto: { ...linea.producto, stock: producto?.stock ?? 0 } }
+        }))
+        setActualizado(fecha)
+      }),
+      api.get<Categoria[]>('/categorias', { signal: controller.signal, timeout: 20000 }).then(({ data }) => {
+        if (controller.signal.aborted) return
+        guardarCatalogo(scope, 'categorias', data)
+        setCategorias(data)
+      }),
+      api.get<CuentaMp[]>('/cuentas-mp', options).then(({ data }) => {
+        if (controller.signal.aborted) return
+        guardarCatalogo(scope, 'cuentas-mp', data)
+        setCuentasMp(data)
+      }),
+    ]
+    void Promise.allSettled(requests).then((results) => {
+      if (controller.signal.aborted) return
+      setErrorCatalogo(results.some((result) => result.status === 'rejected'))
+      setActualizando(false)
+    })
+    return () => controller.abort()
+  }, [scope, sucursalId, revisionCatalogo])
 
   const categoriasConProductos = useMemo(() => {
     const counts = new Map<number, number>()
@@ -354,6 +406,10 @@ export default function NuevaVenta() {
           }
         }),
       })
+      catalogoRequest.current?.abort()
+      if (scope) descontarStockCatalogo(scope, lineas.flatMap((l) =>
+        l.tipo === 'producto' ? [{ productoId: l.producto.id, cantidad: l.cantidad }] : []
+      ))
       toast.success('Venta registrada')
       navigate('/ventas')
     } catch (err: unknown) {
@@ -361,6 +417,9 @@ export default function NuevaVenta() {
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
         'No se pudo registrar la venta'
       toast.error(msg)
+      if ((err as { response?: { status?: number } })?.response?.status === 400) {
+        setRevisionCatalogo((prev) => prev + 1)
+      }
     } finally {
       setSaving(false)
     }
@@ -373,6 +432,27 @@ export default function NuevaVenta() {
         <p className="text-slate-500 text-sm">
           {sucursal?.nombre} · productos o cobro de importes directos
         </p>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+        <p className="text-xs text-slate-600" role="status">
+          {actualizando
+            ? actualizado ? 'Catálogo guardado disponible · actualizando…' : 'Cargando catálogo…'
+            : errorCatalogo
+              ? actualizado ? 'Conexión lenta: se conserva el catálogo guardado.' : 'No se pudo cargar el catálogo. Volvé a intentar.'
+              : 'Catálogo actualizado'}
+          {actualizado && (
+            <span className="ml-1">Última actualización: {new Date(actualizado).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.</span>
+          )}
+        </p>
+        <button
+          type="button"
+          disabled={actualizando || saving}
+          onClick={() => setRevisionCatalogo((prev) => prev + 1)}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+        >
+          <RefreshCw size={14} className={actualizando ? 'animate-spin' : ''} /> Actualizar
+        </button>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
